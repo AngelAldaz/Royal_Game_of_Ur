@@ -1,5 +1,6 @@
 """
 Colores y dimensiones del UI.
+Paleta inspirada en el tablero original de Ur (madera y lapislázuli).
 """
 
 # Ventana
@@ -8,53 +9,72 @@ WIN_H = 800
 FPS = 60
 
 # Colores (RGB)
-BG = (28, 28, 35)
-PANEL_BG = (20, 20, 28)
-TEXT = (235, 235, 240)
-TEXT_DIM = (160, 160, 170)
-ACCENT = (240, 195, 90)       # dorado
-TILE = (60, 60, 75)
-TILE_BORDER = (100, 100, 120)
-ROSETTE = (180, 90, 60)
-ROSETTE_SAFE = (110, 80, 200)
+BG = (28, 22, 18)               # marrón muy oscuro (fondo)
+BG_GRAD_TOP = (38, 30, 24)
+BG_GRAD_BOT = (18, 14, 10)
+PANEL_BG = (24, 20, 16)
+PANEL_BORDER = (90, 75, 50)
+TEXT = (240, 230, 210)
+TEXT_DIM = (170, 155, 130)
+ACCENT = (245, 200, 100)        # dorado
+ACCENT_DIM = (160, 130, 70)
 
-J1_COLOR = (240, 240, 240)    # blanco
-J2_COLOR = (40, 40, 50)       # negro
-J1_OUTLINE = (200, 200, 210)
-J2_OUTLINE = (120, 120, 140)
+# Tablero (madera oscura)
+BOARD_BG = (62, 42, 28)
+BOARD_BORDER = (110, 75, 40)
+TILE = (88, 65, 42)             # cuadros normales (madera media)
+TILE_BORDER = (140, 105, 70)
+TILE_HOVER = (115, 92, 62)
 
-DICE_BG = (210, 210, 220)
-DICE_DOT = (40, 40, 50)
-DICE_BORDER = (60, 60, 75)
+# Rosetas — color lapislázuli (azul oscuro con motas)
+ROSETTE = (60, 90, 150)
+ROSETTE_DOT = (240, 200, 110)
+ROSETTE_BORDER = (100, 140, 200)
+ROSETTE_SAFE = (140, 90, 200)   # roseta 8 — púrpura para distinguirla
+ROSETTE_SAFE_DOT = (255, 220, 130)
 
-BTN_BG = (60, 60, 80)
-BTN_BG_HOVER = (90, 90, 120)
-BTN_TEXT = (240, 240, 245)
+# Fichas
+J1_COLOR = (245, 240, 225)      # blanco hueso
+J1_HIGHLIGHT = (255, 255, 245)
+J1_SHADOW = (180, 170, 150)
+J1_NUMBER = (60, 40, 25)
 
-OK_GREEN = (90, 200, 120)
+J2_COLOR = (35, 28, 22)         # negro mate
+J2_HIGHLIGHT = (75, 60, 48)
+J2_SHADOW = (15, 10, 8)
+J2_NUMBER = (245, 225, 180)
+
+# Dados
+DICE_BG = (220, 215, 200)
+DICE_BG_TOP = (240, 235, 220)
+DICE_DOT = (35, 28, 22)
+DICE_BORDER = (110, 90, 60)
+
+# Botones
+BTN_BG = (70, 55, 35)
+BTN_BG_HOVER = (110, 85, 50)
+BTN_BG_DISABLED = (40, 35, 28)
+BTN_BORDER = (140, 105, 70)
+BTN_TEXT = (245, 230, 200)
+BTN_TEXT_DISABLED = (110, 100, 85)
+
+# Estados
+OK_GREEN = (130, 220, 140)
 WARN_RED = (220, 90, 90)
+SELECTION = (255, 220, 110)
 
-# Tablero
-BOARD_X = 60
-BOARD_Y = 200
-TILE_SIZE = 80
+# Layout
+BOARD_X = 100
+BOARD_Y = 220
+TILE_SIZE = 72
 TILE_GAP = 6
 
 # Layout: el tablero del Ur tiene 3 filas y 8 columnas, con huecos en la fila A y C
-# Fila A (J1):  [4][3][2][1] _ _ [14][13]   <- columnas 1..4 y 7..8
-# Fila B (com): [5][6][7][8][9][10][11][12] <- columnas 1..8
-# Fila C (J2):  [18][17][16][15] _ _ [20][19]
 BOARD_ROWS = 3
 BOARD_COLS = 8
 
 # Mapeo casilla -> (col_index, row_index) en la cuadricula del tablero.
 # row 0 = J1 arriba, row 1 = comun (medio), row 2 = J2 abajo
-# Las casillas privadas de J1 estan en su recorrido: 4,3,2,1 (de izq a der) y 14,13
-# Recordatorio del layout original del documento:
-#         Col1     Col2     Col3     Col4              Col7     Col8
-# Fila A   [ 4✿]   [ 3 ]   [ 2 ]   [ 1 ]             [14✿]   [13 ]
-# Fila B   [ 5 ]   [ 6 ]   [ 7 ]   [ 8✿]   [ 9 ]    [10 ]   [11 ]   [12 ]
-# Fila C   [18✿]   [17 ]   [16 ]   [15 ]             [20✿]   [19 ]
 SQUARE_GRID = {
     4: (0, 0),  3: (1, 0),  2: (2, 0),  1: (3, 0),
     14: (6, 0), 13: (7, 0),
@@ -64,8 +84,8 @@ SQUARE_GRID = {
     20: (6, 2), 19: (7, 2),
 }
 
-# Panel EEO (formula)
-PANEL_X = 760
+# Panel EEO
+PANEL_X = 800
 PANEL_Y = 20
-PANEL_W = 500
+PANEL_W = 460
 PANEL_H = 760

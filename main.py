@@ -135,7 +135,7 @@ def main():
                         if not moves:
                             ops.lose_turn(game_state)
                         else:
-                            chosen = AI.choose_move(game_state, depth=2)
+                            chosen = AI.choose_move(game_state, depth=3)
                             if chosen is None:
                                 ops.lose_turn(game_state)
                             else:
@@ -180,11 +180,10 @@ def main():
                 roll_btn.callback = None
 
         # ---------------- RENDER ----------------
-        screen.fill(T.BG)
-
         if app_state == STATE_MENU:
             menu.draw(screen)
         else:
+            menus._draw_background(screen)
             # Tablero + fichas + reservas + turno
             highlights = _highlights_for(game_state, legal_moves_list)
             ai_thinking = (mode == menus.Menu.MODE_AI and game_state.turn == C.J2 and pending_ai_action)

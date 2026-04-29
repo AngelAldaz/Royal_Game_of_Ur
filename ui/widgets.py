@@ -1,5 +1,5 @@
 """
-Widgets simples para Pygame: boton, etiqueta. Sin dependencias adicionales.
+Widgets simples para Pygame: Button, render_text.
 """
 
 import pygame
@@ -16,13 +16,24 @@ class Button:
         self.enabled = True
 
     def draw(self, screen):
-        color = T.BTN_BG_HOVER if (self.hover and self.enabled) else T.BTN_BG
         if not self.enabled:
-            color = (40, 40, 50)
-        pygame.draw.rect(screen, color, self.rect, border_radius=8)
-        pygame.draw.rect(screen, T.TILE_BORDER, self.rect, width=2, border_radius=8)
+            color = T.BTN_BG_DISABLED
+            border = T.BTN_BG_DISABLED
+        elif self.hover:
+            color = T.BTN_BG_HOVER
+            border = T.ACCENT
+        else:
+            color = T.BTN_BG
+            border = T.BTN_BORDER
+
+        # Sombra
+        shadow_rect = self.rect.move(0, 3)
+        pygame.draw.rect(screen, (0, 0, 0), shadow_rect, border_radius=10)
+        pygame.draw.rect(screen, color, self.rect, border_radius=10)
+        pygame.draw.rect(screen, border, self.rect, width=2, border_radius=10)
+
         if self.font:
-            text_color = T.BTN_TEXT if self.enabled else T.TEXT_DIM
+            text_color = T.BTN_TEXT if self.enabled else T.BTN_TEXT_DISABLED
             txt_surf = self.font.render(self.text, True, text_color)
             tx = self.rect.x + (self.rect.w - txt_surf.get_width()) // 2
             ty = self.rect.y + (self.rect.h - txt_surf.get_height()) // 2

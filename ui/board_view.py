@@ -2,6 +2,7 @@
 Render del tablero, fichas, reservas/metas e indicadores de turno.
 """
 
+import math
 import pygame
 from game import constants as C
 from . import theme as T
@@ -27,36 +28,24 @@ def draw_board(screen, state, font_small, highlights=None, ai_thinking=False):
     """
     highlights = highlights or []
 
-    # Borde exterior del area del tablero
+    # Borde exterior del tablero (tipo madera)
     bw = T.BOARD_COLS * (T.TILE_SIZE + T.TILE_GAP) - T.TILE_GAP
     bh = T.BOARD_ROWS * (T.TILE_SIZE + T.TILE_GAP) - T.TILE_GAP
-    border_rect = pygame.Rect(T.BOARD_X - 10, T.BOARD_Y - 10, bw + 20, bh + 20)
-    pygame.draw.rect(screen, (45, 38, 30), border_rect, border_radius=12)
+    border_rect = pygame.Rect(T.BOARD_X - 14, T.BOARD_Y - 14, bw + 28, bh + 28)
+    pygame.draw.rect(screen, T.BOARD_BG, border_rect, border_radius=14)
+    pygame.draw.rect(screen, T.BOARD_BORDER, border_rect, width=3, border_radius=14)
 
     # Casillas
-    for sq, (col, row) in T.SQUARE_GRID.items():
-        rect = square_rect(sq)
-        is_rosette = C.is_rosette(sq)
-        if sq == C.ROSETA_SEGURA:
-            color = T.ROSETTE_SAFE
-        elif is_rosette:
-            color = T.ROSETTE
-        else:
-            color = T.TILE
-        pygame.draw.rect(screen, color, rect, border_radius=8)
-        pygame.draw.rect(screen, T.TILE_BORDER, rect, width=2, border_radius=8)
-
-        # Numero de casilla y simbolo de roseta
-        label = f"{sq}{'✿' if is_rosette else ''}"
-        txt = font_small.render(label, True, T.TEXT_DIM)
-        screen.blit(txt, (rect.x + 6, rect.y + 4))
+    for sq in T.SQUARE_GRID:
+        _draw_tile(screen, sq)
 
     # Highlights (movimientos legales)
     for sq, color in highlights:
         if sq is None or sq not in T.SQUARE_GRID:
             continue
         rect = square_rect(sq)
-        pygame.draw.rect(screen, color, rect, width=4, border_radius=8)
+        # Marco brillante con grosor pulsante
+        pygame.draw.rect(screen, color, rect.inflate(6, 6), width=4, border_radius=10)
 
     # Fichas en el tablero
     for piece in state.pieces:
@@ -68,81 +57,145 @@ def draw_board(screen, state, font_small, highlights=None, ai_thinking=False):
         cx, cy = square_center(sq)
         _draw_piece(screen, cx, cy, piece.owner, piece.number, font_small)
 
-    # Reservas y metas (fuera del tablero)
+    # Reservas y metas
     _draw_reserve_meta(screen, state, font_small)
 
-    # Indicador de turno
+    # Indicador de turno (parte superior)
     _draw_turn_indicator(screen, state, font_small, ai_thinking)
 
 
-def _draw_piece(screen, cx, cy, owner, number, font, radius=22):
-    """Dibuja una ficha como circulo con un numero."""
-    color = T.J1_COLOR if owner == C.J1 else T.J2_COLOR
-    outline = T.J1_OUTLINE if owner == C.J1 else T.J2_OUTLINE
-    pygame.draw.circle(screen, color, (cx, cy), radius)
-    pygame.draw.circle(screen, outline, (cx, cy), radius, width=3)
-    text_color = T.J2_COLOR if owner == C.J1 else T.J1_COLOR
-    txt = font.render(str(number), True, text_color)
+def _draw_tile(screen, sq):
+    """Dibuja una casilla, con su decoración si es roseta."""
+    rect = square_rect(sq)
+    is_rosette = C.is_rosette(sq)
+    is_safe = (sq == C.ROSETA_SEGURA)
+
+    if is_safe:
+        base_color = T.ROSETTE_SAFE
+        dot_color = T.ROSETTE_SAFE_DOT
+    elif is_rosette:
+        base_color = T.ROSETTE
+        dot_color = T.ROSETTE_DOT
+    else:
+        base_color = T.TILE
+        dot_color = None
+
+    # Sombra interna sutil
+    shadow_rect = rect.move(2, 2)
+    pygame.draw.rect(screen, (0, 0, 0, 80), shadow_rect, border_radius=10)
+    pygame.draw.rect(screen, base_color, rect, border_radius=10)
+    pygame.draw.rect(screen, T.TILE_BORDER, rect, width=2, border_radius=10)
+
+    # Dibujar el símbolo de roseta (5 puntos en cruz)
+    if is_rosette:
+        cx, cy = rect.center
+        r = 5
+        # punto central + 4 alrededor
+        pygame.draw.circle(screen, dot_color, (cx, cy), r)
+        offsets = [(0, -22), (0, 22), (-22, 0), (22, 0)]
+        for ox, oy in offsets:
+            pygame.draw.circle(screen, dot_color, (cx + ox, cy + oy), r - 1)
+        # líneas conectoras suaves
+        pygame.draw.line(screen, dot_color, (cx, cy - 20), (cx, cy + 20), 2)
+        pygame.draw.line(screen, dot_color, (cx - 20, cy), (cx + 20, cy), 2)
+
+
+def _draw_piece(screen, cx, cy, owner, number, font, radius=24):
+    """Dibuja una ficha como disco con sombra y número."""
+    if owner == C.J1:
+        base = T.J1_COLOR
+        highlight = T.J1_HIGHLIGHT
+        shadow = T.J1_SHADOW
+        num_color = T.J1_NUMBER
+    else:
+        base = T.J2_COLOR
+        highlight = T.J2_HIGHLIGHT
+        shadow = T.J2_SHADOW
+        num_color = T.J2_NUMBER
+
+    # Sombra (offset abajo)
+    pygame.draw.circle(screen, (0, 0, 0), (cx + 2, cy + 3), radius)
+    # Aro exterior
+    pygame.draw.circle(screen, shadow, (cx, cy), radius)
+    # Cuerpo
+    pygame.draw.circle(screen, base, (cx, cy), radius - 2)
+    # Highlight superior izquierdo (efecto 3D)
+    pygame.draw.circle(screen, highlight, (cx - radius // 4, cy - radius // 4), radius // 3)
+    # Borde delgado
+    pygame.draw.circle(screen, shadow, (cx, cy), radius - 2, width=1)
+
+    # Número
+    txt = font.render(str(number), True, num_color)
     screen.blit(txt, (cx - txt.get_width() // 2, cy - txt.get_height() // 2))
 
 
 def _draw_reserve_meta(screen, state, font):
     """Dibuja columnas de reserva y meta a los lados del tablero."""
-    # J1: arriba-derecha, fuera del tablero
-    j1_reserve_x = T.BOARD_X - 50
-    j1_reserve_y = T.BOARD_Y - 5
-    j1_meta_x = T.BOARD_X + (T.TILE_SIZE + T.TILE_GAP) * 8 + 10
-    j1_meta_y = T.BOARD_Y - 5
+    bw = T.BOARD_COLS * (T.TILE_SIZE + T.TILE_GAP)
 
-    # J2: abajo
-    j2_reserve_x = T.BOARD_X - 50
-    j2_reserve_y = T.BOARD_Y + (T.TILE_SIZE + T.TILE_GAP) * 2
-    j2_meta_x = T.BOARD_X + (T.TILE_SIZE + T.TILE_GAP) * 8 + 10
-    j2_meta_y = T.BOARD_Y + (T.TILE_SIZE + T.TILE_GAP) * 2
+    # Posiciones (centro X de cada columna)
+    j1_reserve_cx = 45
+    j2_reserve_cx = 45
+    j1_meta_cx = T.BOARD_X + bw + 12
+    j2_meta_cx = T.BOARD_X + bw + 12
 
-    # Etiquetas
-    screen.blit(font.render("Reserva J1", True, T.TEXT_DIM), (j1_reserve_x - 30, j1_reserve_y - 22))
-    screen.blit(font.render(f"Meta J1: {state.players_meta[C.J1]}", True, T.TEXT_DIM),
-                (j1_meta_x - 5, j1_meta_y - 22))
-    screen.blit(font.render("Reserva J2", True, T.TEXT_DIM), (j2_reserve_x - 30, j2_reserve_y + T.TILE_SIZE + 4))
-    screen.blit(font.render(f"Meta J2: {state.players_meta[C.J2]}", True, T.TEXT_DIM),
-                (j2_meta_x - 5, j2_meta_y + T.TILE_SIZE + 4))
+    j1_y = T.BOARD_Y + 5
+    j2_y = T.BOARD_Y + (T.TILE_SIZE + T.TILE_GAP) * 2 + 5
 
-    # Dibujar fichas en reserva (apiladas en columna)
+    label_font = pygame.font.SysFont("arial", 14, bold=True)
+
+    # Etiquetas centradas sobre cada columna
+    def centered_label(text, color, cx, y):
+        surf = label_font.render(text, True, color)
+        screen.blit(surf, (cx - surf.get_width() // 2, y))
+
+    centered_label("Reserva J1", T.TEXT_DIM, j1_reserve_cx, j1_y - 22)
+    centered_label(f"Meta J1: {state.players_meta[C.J1]}/4", T.ACCENT_DIM, j1_meta_cx, j1_y - 22)
+    centered_label("Reserva J2", T.TEXT_DIM, j2_reserve_cx, j2_y + T.TILE_SIZE + 4)
+    centered_label(f"Meta J2: {state.players_meta[C.J2]}/4", T.ACCENT_DIM, j2_meta_cx, j2_y + T.TILE_SIZE + 4)
+
     j1_reserve_pieces = [p for p in state.pieces_of(C.J1) if p.state == C.ESPERA]
     j2_reserve_pieces = [p for p in state.pieces_of(C.J2) if p.state == C.ESPERA]
     j1_meta_pieces = [p for p in state.pieces_of(C.J1) if p.state == C.COMPLETADA]
     j2_meta_pieces = [p for p in state.pieces_of(C.J2) if p.state == C.COMPLETADA]
 
-    # Reserva J1 (vertical)
+    spacing = 30
     for i, p in enumerate(j1_reserve_pieces):
-        cy = j1_reserve_y + 20 + i * 24
-        _draw_piece(screen, j1_reserve_x, cy, C.J1, p.number, font, radius=14)
-    # Meta J1
+        _draw_piece(screen, j1_reserve_cx, j1_y + 18 + i * spacing, C.J1, p.number, font, radius=14)
     for i, p in enumerate(j1_meta_pieces):
-        cy = j1_meta_y + 20 + i * 24
-        _draw_piece(screen, j1_meta_x + 15, cy, C.J1, p.number, font, radius=14)
-    # Reserva J2
+        _draw_piece(screen, j1_meta_cx, j1_y + 18 + i * spacing, C.J1, p.number, font, radius=14)
     for i, p in enumerate(j2_reserve_pieces):
-        cy = j2_reserve_y + 20 + i * 24
-        _draw_piece(screen, j2_reserve_x, cy, C.J2, p.number, font, radius=14)
-    # Meta J2
+        _draw_piece(screen, j2_reserve_cx, j2_y + 18 + i * spacing, C.J2, p.number, font, radius=14)
     for i, p in enumerate(j2_meta_pieces):
-        cy = j2_meta_y + 20 + i * 24
-        _draw_piece(screen, j2_meta_x + 15, cy, C.J2, p.number, font, radius=14)
+        _draw_piece(screen, j2_meta_cx, j2_y + 18 + i * spacing, C.J2, p.number, font, radius=14)
 
 
 def _draw_turn_indicator(screen, state, font, ai_thinking):
-    msg = f"Turno: Jugador {state.turn}"
+    """Banner del turno actual, arriba a la izquierda."""
+    box_rect = pygame.Rect(20, 20, 700, 80)
+    pygame.draw.rect(screen, T.PANEL_BG, box_rect, border_radius=12)
+    pygame.draw.rect(screen, T.PANEL_BORDER, box_rect, width=2, border_radius=12)
+
+    # Indicador circular del jugador en turno
+    cx = box_rect.x + 40
+    cy = box_rect.centery
+    _draw_piece(screen, cx, cy, state.turn, state.turn, font, radius=24)
+
+    # Texto
+    msg1 = f"Turno del Jugador {state.turn}"
     if ai_thinking:
-        msg += "  (IA pensando...)"
-    pygame.draw.rect(screen, T.PANEL_BG, pygame.Rect(20, 20, 400, 50), border_radius=8)
-    pygame.draw.rect(screen, T.ACCENT, pygame.Rect(20, 20, 400, 50), width=2, border_radius=8)
-    color = T.J1_OUTLINE if state.turn == C.J1 else T.J2_OUTLINE
-    if state.turn == C.J2:
-        color = (180, 180, 200)
-    txt = font.render(msg, True, T.ACCENT)
-    screen.blit(txt, (32, 35))
+        msg2 = "IA pensando..."
+    elif state.dice_rolled:
+        if state.dice_sum == 0:
+            msg2 = "Suma 0 — pasa turno"
+        else:
+            msg2 = f"Selecciona una ficha para mover {state.dice_sum} casilla{'s' if state.dice_sum != 1 else ''}"
+    else:
+        msg2 = "Lanza los dados"
+
+    title_font = pygame.font.SysFont("arial", 22, bold=True)
+    screen.blit(title_font.render(msg1, True, T.ACCENT), (cx + 40, cy - 22))
+    screen.blit(font.render(msg2, True, T.TEXT_DIM), (cx + 40, cy + 8))
 
 
 def piece_at_pos(state, mouse_pos):
@@ -161,19 +214,15 @@ def piece_at_pos(state, mouse_pos):
 
 def reserve_piece_at_pos(state, mouse_pos):
     """Detecta si el click cayó en una ficha de la reserva del jugador en turno."""
-    j1_reserve_x = T.BOARD_X - 50
-    j1_reserve_y = T.BOARD_Y - 5
-    j2_reserve_x = T.BOARD_X - 50
-    j2_reserve_y = T.BOARD_Y + (T.TILE_SIZE + T.TILE_GAP) * 2
-
+    cx = 45
     if state.turn == C.J1:
-        rx, ry = j1_reserve_x, j1_reserve_y + 20
+        cy_base = T.BOARD_Y + 5 + 18
     else:
-        rx, ry = j2_reserve_x, j2_reserve_y + 20
+        cy_base = T.BOARD_Y + (T.TILE_SIZE + T.TILE_GAP) * 2 + 5 + 18
 
     reserve_pieces = [p for p in state.pieces_of(state.turn) if p.state == C.ESPERA]
     for i, p in enumerate(reserve_pieces):
-        cy = ry + i * 24
-        if (mouse_pos[0] - rx) ** 2 + (mouse_pos[1] - cy) ** 2 <= 14 ** 2:
+        cy = cy_base + i * 30
+        if (mouse_pos[0] - cx) ** 2 + (mouse_pos[1] - cy) ** 2 <= 16 ** 2:
             return p
     return None
