@@ -1,18 +1,18 @@
 """
-Operadores y reglas del juego, mapeados 1 a 1 a la Tabla 2 del analisis EEO 3.1.
+Operadores y reglas del juego, mapeados 1 a 1 a la Tabla 2 del análisis EEO 3.1.
 
-Operadores:
-  1. Lanzar dados
-  2. Entrar ficha al tablero
-  3. Mover ficha
-  4. Capturar ficha rival   (efecto colateral de mover)
-  5. Completar ficha (a meta)
-  6. Obtener turno extra    (efecto de roseta)
-  7. Cambiar turno
-  8. Perder turno (dados = 0)
+Los nombres de las variables (R, M, n, J, S, P, D, tau, sigma_D, O) son
+exactamente los del análisis EEO documentado en la Tabla 1.
 
-Cada funcion modifica el GameState in-place y devuelve un dict con info del cambio,
-o se aplica como parte de un operador compuesto (apply_move).
+Operadores implementados:
+  1. Lanzar dados            -> roll_dice(state)
+  2. Entrar ficha al tablero -> apply_move(state, piece)   [rama ESPERA]
+  3. Mover ficha             -> apply_move(state, piece)   [rama ACTIVA]
+  4. Capturar ficha rival    -> efecto compuesto dentro de apply_move
+  5. Completar ficha (meta)  -> efecto compuesto dentro de apply_move
+  6. Obtener turno extra     -> efecto compuesto dentro de apply_move
+  7. Cambiar turno           -> change_turn(state)
+  8. Perder turno            -> lose_turn(state)
 """
 
 import random
@@ -24,32 +24,39 @@ from . import constants as C
 def roll_dice(state, rng=None):
     """
     Operador: Lanzar dados.
-    Condicion: es turno del jugador y aun no ha lanzado dados en este turno.
-    Efecto: D_k = aleatorio{0,1} para k=1..4, dice_rolled=True.
+
+    Condición de aplicabilidad:
+        tau = J_j  (es turno del jugador j)  AND  no se han lanzado los dados aún
+
+    Efecto:
+        D_k = aleatorio{0, 1}  para k = 1..4
+        sigma_D = sum(D_k)
     """
     rng = rng or random
-    state.dice = [rng.randint(0, 1) for _ in range(C.NUM_DADOS)]
+    state.D = [rng.randint(0, 1) for _ in range(C.NUM_DADOS)]
     state.dice_rolled = True
-    state.last_event = f"Jugador {state.turn} lanza dados: suma = {state.dice_sum}"
-    return {"dice": list(state.dice), "sum": state.dice_sum}
+    state.last_event = f"Jugador {state.tau} lanza dados: ΣD = {state.sigma_D}"
+    return {"D": list(state.D), "sigma_D": state.sigma_D}
 
 
 # --------- 7/8. Cambiar turno / perder turno ---------
 
 def change_turn(state):
-    """Pasa el turno al oponente y limpia los dados."""
-    state.turn = C.opponent(state.turn)
-    state.dice = [0, 0, 0, 0]
+    """Operador: Cambiar turno. Pasa el turno al oponente y limpia los dados."""
+    state.tau = C.opponent(state.tau)
+    state.D = [0, 0, 0, 0]
     state.dice_rolled = False
 
 
 def lose_turn(state):
     """
     Operador: Perder turno.
-    Condicion: dice_sum == 0 (o no hay movimientos legales).
-    Efecto: el turno pasa al oponente.
+
+    Condición:  sigma_D == 0   ó   no hay movimientos legales
+
+    Efecto: tau = J_opuesto
     """
-    state.last_event = f"Jugador {state.turn} pierde turno (suma dados = {state.dice_sum})"
+    state.last_event = f"Jugador {state.tau} pierde turno (ΣD = {state.sigma_D})"
     change_turn(state)
 
 
@@ -57,56 +64,56 @@ def lose_turn(state):
 
 def legal_moves(state):
     """
-    Devuelve lista de fichas movibles para el jugador en turno con la suma de dados actual.
-    Cada elemento es la propia ficha (Piece). Si esta vacia, el jugador no puede mover.
+    Devuelve la lista de fichas movibles para el jugador en turno (tau)
+    con la suma de dados actual (sigma_D).
 
-    Una ficha es movible si:
-      - state == espera y la casilla destino (posicion = sumaD) esta libre o no es ficha propia
-      - state == activa y posicion + sumaD <= 15 y casilla destino libre o no es propia
-        ademas: si la casilla destino es la roseta segura (8) y esta ocupada por rival -> no movible
+    Una ficha F_i es movible si:
+      - S_i == espera y la casilla destino (P_i = sigma_D) está libre o no es propia
+      - S_i == activa y P_i + sigma_D <= 15 y casilla destino libre o no propia
+      - además: si destino es la roseta segura (8) y está ocupada por rival,
+        no se puede entrar (regla de roseta segura).
     """
-    if state.dice_sum == 0 or state.is_terminal():
+    if state.sigma_D == 0 or state.is_terminal():
         return []
 
     moves = []
-    s = state.dice_sum
-    for piece in state.pieces_of(state.turn):
-        if piece.state == C.COMPLETADA:
+    s = state.sigma_D
+    for piece in state.pieces_of(state.tau):
+        if piece.S == C.COMPLETADA:
             continue
 
-        if piece.state == C.ESPERA:
-            new_pos = s
-            if new_pos > 14:
+        if piece.S == C.ESPERA:
+            new_P = s
+            if new_P > 14:
                 continue
-            target_square = C.square_at(piece.owner, new_pos)
+            target_square = C.square_at(piece.J, new_P)
             occupant = state.occupant_at(target_square)
-            if occupant == piece.owner:
+            if occupant == piece.J:
                 continue
-            # casilla 8 segura: no se puede capturar
-            if target_square == C.ROSETA_SEGURA and occupant != 0 and occupant != piece.owner:
+            if target_square == C.ROSETA_SEGURA and occupant != 0 and occupant != piece.J:
                 continue
             moves.append(piece)
 
-        elif piece.state == C.ACTIVA:
-            new_pos = piece.position + s
-            if new_pos > C.META_POS:
-                continue  # se pasa de la meta, no permitido
-            if new_pos == C.META_POS:
-                # salida exacta -> siempre legal (la casilla origen se libera)
+        elif piece.S == C.ACTIVA:
+            new_P = piece.P + s
+            if new_P > C.META_POS:
+                continue  # se pasa de la meta
+            if new_P == C.META_POS:
+                # Salida exacta -> Operador "Completar ficha", siempre legal
                 moves.append(piece)
                 continue
-            target_square = C.square_at(piece.owner, new_pos)
+            target_square = C.square_at(piece.J, new_P)
             occupant = state.occupant_at(target_square)
-            if occupant == piece.owner:
+            if occupant == piece.J:
                 continue
-            if target_square == C.ROSETA_SEGURA and occupant != 0 and occupant != piece.owner:
+            if target_square == C.ROSETA_SEGURA and occupant != 0 and occupant != piece.J:
                 continue
             moves.append(piece)
 
     return moves
 
 
-# --------- 2/3/4/5/6. Aplicar movimiento ---------
+# --------- 2/3/4/5/6. Aplicar movimiento (operador compuesto) ---------
 
 def apply_move(state, piece):
     """
@@ -114,90 +121,90 @@ def apply_move(state, piece):
     Compone los operadores: Entrar / Mover / Capturar / Completar / Turno extra.
 
     Retorna un dict con eventos ocurridos: captured (Piece o None), completed (bool),
-    extra_turn (bool), entered (bool), event (str descripcion).
+    extra_turn (bool), entered (bool), event (str descripción).
     """
-    assert piece.owner == state.turn, "La ficha no pertenece al jugador en turno"
-    assert state.dice_sum > 0, "No se puede mover con suma de dados 0"
+    assert piece.J == state.tau, "La ficha no pertenece al jugador en turno"
+    assert state.sigma_D > 0, "No se puede mover con sigma_D = 0"
 
-    s = state.dice_sum
-    info = {"captured": None, "completed": False, "extra_turn": False, "entered": False, "event": ""}
+    s = state.sigma_D
+    info = {"captured": None, "completed": False, "extra_turn": False,
+            "entered": False, "event": ""}
 
-    # Casilla origen
     origin_square = piece.square()  # None si está en espera
 
-    # Caso A: Entrar ficha al tablero
-    if piece.state == C.ESPERA:
-        new_pos = s
-        target_square = C.square_at(piece.owner, new_pos)
+    # ===== Operador 2: Entrar ficha al tablero =====
+    if piece.S == C.ESPERA:
+        new_P = s
+        target_square = C.square_at(piece.J, new_P)
 
-        # capturar si hay rival
+        # ===== Operador 4: Capturar ficha rival (si la casilla destino tiene rival) =====
         rival_occupant = state.occupant_at(target_square)
-        if rival_occupant != 0 and rival_occupant != piece.owner:
+        if rival_occupant != 0 and rival_occupant != piece.J:
             captured = _piece_at_square(state, target_square)
             _send_to_reserve(state, captured)
             info["captured"] = captured
 
-        # actualizar ficha
-        piece.state = C.ACTIVA
-        piece.position = new_pos
-        state.players_reserva[piece.owner] -= 1
-        state.ocupantes[target_square] = piece.owner
+        # Aplicar entrada
+        piece.S = C.ACTIVA
+        piece.P = new_P
+        state.R[piece.J] -= 1
+        state.O[target_square] = piece.J
         info["entered"] = True
-        info["event"] = f"J{piece.owner} entra ficha {piece.number} en casilla {target_square}"
+        info["event"] = f"J{piece.J} entra ficha {piece.n} en casilla {target_square}"
 
-    # Caso B: Mover ficha activa
+    # ===== Operador 3: Mover ficha activa =====
     else:
-        new_pos = piece.position + s
+        new_P = piece.P + s
 
         # Liberar casilla origen
         if origin_square is not None:
-            state.ocupantes[origin_square] = 0
+            state.O[origin_square] = 0
 
-        if new_pos == C.META_POS:
-            # Completar
-            piece.state = C.COMPLETADA
-            piece.position = 0
-            state.players_meta[piece.owner] += 1
+        if new_P == C.META_POS:
+            # ===== Operador 5: Completar ficha =====
+            piece.S = C.COMPLETADA
+            piece.P = 0
+            state.M[piece.J] += 1
             info["completed"] = True
-            info["event"] = f"J{piece.owner} completa ficha {piece.number} (a meta)"
+            info["event"] = f"J{piece.J} completa ficha {piece.n} (a meta)"
         else:
-            target_square = C.square_at(piece.owner, new_pos)
+            target_square = C.square_at(piece.J, new_P)
 
-            # capturar si hay rival
+            # ===== Operador 4: Capturar ficha rival =====
             rival_occupant = state.occupant_at(target_square)
-            if rival_occupant != 0 and rival_occupant != piece.owner:
+            if rival_occupant != 0 and rival_occupant != piece.J:
                 captured = _piece_at_square(state, target_square)
                 _send_to_reserve(state, captured)
                 info["captured"] = captured
 
-            piece.position = new_pos
-            state.ocupantes[target_square] = piece.owner
-            info["event"] = f"J{piece.owner} mueve ficha {piece.number} a casilla {target_square}"
+            piece.P = new_P
+            state.O[target_square] = piece.J
+            info["event"] = f"J{piece.J} mueve ficha {piece.n} a casilla {target_square}"
 
     # Comprobar victoria
-    if state.players_meta[piece.owner] == C.FICHAS_POR_JUGADOR:
-        state.winner = piece.owner
+    if state.M[piece.J] == C.FICHAS_POR_JUGADOR:
+        state.winner = piece.J
 
-    # Roseta -> turno extra
+    # ===== Operador 6: Obtener turno extra (si la ficha cayó en roseta) =====
     if not info["completed"]:
         landed_square = piece.square()
         if landed_square is not None and C.is_rosette(landed_square):
             info["extra_turn"] = True
 
-    # Construir descripcion completa del evento (para el panel)
+    # Construir descripción completa del evento
     descr = info["event"]
     if info["captured"]:
         cap = info["captured"]
-        descr += f" | captura ficha {cap.number} de J{cap.owner}"
+        descr += f" | captura ficha {cap.n} de J{cap.J}"
     if info["extra_turn"]:
         descr += " | turno extra (roseta)"
     state.last_event = descr
 
-    # Turno: si no hubo turno extra, cambiar
-    state.dice = [0, 0, 0, 0]
+    # ===== Operador 7: Cambiar turno (si NO hubo turno extra) =====
+    state.D = [0, 0, 0, 0]
     state.dice_rolled = False
     if not info["extra_turn"] and not state.is_terminal():
-        state.turn = C.opponent(state.turn)
+        state.tau = C.opponent(state.tau)
 
     return info
 
@@ -206,14 +213,14 @@ def apply_move(state, piece):
 
 def _piece_at_square(state, square):
     """Encuentra la ficha activa que está en la casilla dada."""
-    for p in state.pieces:
-        if p.state == C.ACTIVA and p.square() == square:
+    for p in state.F:
+        if p.S == C.ACTIVA and p.square() == square:
             return p
     return None
 
 
 def _send_to_reserve(state, piece):
-    """Envia una ficha capturada de vuelta a la reserva."""
-    piece.state = C.ESPERA
-    piece.position = 0
-    state.players_reserva[piece.owner] += 1
+    """Efecto del operador Capturar: envía una ficha de vuelta a su reserva."""
+    piece.S = C.ESPERA
+    piece.P = 0
+    state.R[piece.J] += 1
