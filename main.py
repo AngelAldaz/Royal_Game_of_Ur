@@ -9,22 +9,19 @@ Modos:
 Uso:
     python main.py
 
-Nomenclatura EEO usada en el código (estado del juego):
-  R, M    : reservas y metas (R_j, M_j)
-  F       : fichas (F_i con n_i, J_i, S_i, P_i)
-  D       : dados (D_1..D_4)
-  tau     : turno activo
-  sigma_D : suma de dados
-  O       : ocupantes de casillas (O_n)
+Estructura:
+  - game/eeo.py    : SOLO Tabla 1 (entidades) y Tabla 2 (operadores).
+  - game/rules.py  : reglas derivadas (paths, zonas, roseta segura, helpers).
+  - game/engine.py : Game (estado de sesión) + apply_move + legal_moves.
 """
 
 import sys
 import time
 import pygame
 
-from game import constants as C
-from game.state import GameState
-from game import operators as ops
+from game import eeo
+from game import rules
+from game import engine
 from game import ai as AI
 
 from ui import theme as T
@@ -85,7 +82,7 @@ def main():
                 menu.handle(event)
 
             elif app_state == STATE_PLAY:
-                is_ai_turn = (mode == menus.Menu.MODE_AI and game_state.tau == C.J2)
+                is_ai_turn = (mode == menus.Menu.MODE_AI and game_state.tau == eeo.J2)
                 if not is_ai_turn:
                     roll_btn.handle(event)
                     pass_btn.handle(event)
@@ -101,7 +98,7 @@ def main():
                 running = False
             elif menu.choice in (menus.Menu.MODE_HUMAN, menus.Menu.MODE_AI):
                 mode = menu.choice
-                game_state = GameState()
+                game_state = engine.Game()
                 app_state = STATE_PLAY
                 legal_moves_list = []
                 ai_phase = "idle"
@@ -120,19 +117,19 @@ def main():
                 def make_roll_cb(state):
                     def cb():
                         if not state.dice_rolled and not state.is_terminal():
-                            ops.roll_dice(state)
+                            engine.lanzar_dados(state)
                     return cb
                 roll_btn.callback = make_roll_cb(game_state)
 
             def make_pass_cb(state):
                 def cb():
-                    if state.dice_rolled and (state.sigma_D == 0 or not ops.legal_moves(state)):
-                        ops.lose_turn(state)
+                    if state.dice_rolled and (state.sigma_D == 0 or not engine.legal_moves(state)):
+                        engine.perder_turno(state)
                 return cb
             pass_btn.callback = make_pass_cb(game_state)
 
             # ---- TURNO DE LA IA ----
-            is_ai_turn = (mode == menus.Menu.MODE_AI and game_state.tau == C.J2)
+            is_ai_turn = (mode == menus.Menu.MODE_AI and game_state.tau == eeo.J2)
             if is_ai_turn and not game_state.is_terminal():
                 if not game_state.dice_rolled:
                     # Fase 1: la IA va a lanzar dados
@@ -140,7 +137,7 @@ def main():
                         ai_phase = "waiting_to_roll"
                         ai_next_action_at = now + AI_DELAY_BEFORE_ROLL
                     elif now >= ai_next_action_at:
-                        ops.roll_dice(game_state)
+                        engine.lanzar_dados(game_state)
                         ai_phase = "waiting_to_move"
                         ai_next_action_at = now + AI_DELAY_AFTER_ROLL
                 else:
@@ -149,15 +146,15 @@ def main():
                         ai_phase = "waiting_to_move"
                         ai_next_action_at = now + AI_DELAY_AFTER_ROLL
                     elif now >= ai_next_action_at:
-                        moves = ops.legal_moves(game_state)
+                        moves = engine.legal_moves(game_state)
                         if not moves:
-                            ops.lose_turn(game_state)
+                            engine.perder_turno(game_state)
                         else:
                             chosen = AI.choose_move(game_state, depth=3)
                             if chosen is None:
-                                ops.lose_turn(game_state)
+                                engine.perder_turno(game_state)
                             else:
-                                ops.apply_move(game_state, chosen)
+                                engine.apply_move(game_state, chosen)
                         ai_phase = "idle"
                         ai_next_action_at = now + AI_DELAY_AFTER_MOVE
             else:
@@ -165,16 +162,16 @@ def main():
 
             # ---- Movimientos legales y estado de botones ----
             if game_state.dice_rolled and not game_state.is_terminal():
-                legal_moves_list = ops.legal_moves(game_state)
+                legal_moves_list = engine.legal_moves(game_state)
                 pass_btn.enabled = (game_state.sigma_D == 0 or len(legal_moves_list) == 0)
                 roll_btn.enabled = False
                 # Auto-pasar turno (humano) si no hay jugadas posibles
-                is_human_turn = not (mode == menus.Menu.MODE_AI and game_state.tau == C.J2)
+                is_human_turn = not (mode == menus.Menu.MODE_AI and game_state.tau == eeo.J2)
                 if is_human_turn and pass_btn.enabled:
                     if auto_pass_until == 0.0:
                         auto_pass_until = now + 1.5
                     elif now >= auto_pass_until:
-                        ops.lose_turn(game_state)
+                        engine.perder_turno(game_state)
                         auto_pass_until = 0.0
                 else:
                     auto_pass_until = 0.0
@@ -186,7 +183,7 @@ def main():
 
         elif app_state == STATE_GAMEOVER:
             if game_over_screen.choice == "again":
-                game_state = GameState()
+                game_state = engine.Game()
                 app_state = STATE_PLAY
                 legal_moves_list = []
                 game_over_screen = None
@@ -207,7 +204,7 @@ def main():
         else:
             menus._draw_background(screen)
             highlights = _highlights_for(game_state, legal_moves_list)
-            is_ai_turn = (mode == menus.Menu.MODE_AI and game_state.tau == C.J2)
+            is_ai_turn = (mode == menus.Menu.MODE_AI and game_state.tau == eeo.J2)
             ai_thinking = is_ai_turn and ai_phase != "idle"
             board_view.draw_board(screen, game_state, font_small,
                                   highlights=highlights, ai_thinking=ai_thinking)
@@ -232,15 +229,15 @@ def _highlights_for(state, legal_moves):
         return out
     s = state.sigma_D
     for piece in legal_moves:
-        if piece.S != C.ESPERA and piece.S != C.ACTIVA:
+        if piece.S != eeo.ESPERA and piece.S != eeo.ACTIVA:
             continue
-        if piece.S == C.ESPERA:
+        if piece.S == eeo.ESPERA:
             new_P = s
         else:
             new_P = piece.P + s
-        if new_P == C.META_POS or new_P > C.META_POS:
+        if new_P == rules.META_POS or new_P > rules.META_POS:
             continue
-        target = C.square_at(piece.J, new_P)
+        target = rules.square_at(piece.J, new_P)
         if target is None:
             continue
         out.append((target, T.OK_GREEN))
@@ -255,13 +252,13 @@ def _handle_play_click(pos, state, legal_moves):
     # Click sobre ficha en reserva
     p_reserve = board_view.reserve_piece_at_pos(state, pos)
     if p_reserve is not None and p_reserve in legal_moves:
-        ops.apply_move(state, p_reserve)
+        engine.apply_move(state, p_reserve)
         return
 
     # Click sobre ficha en tablero
     p_board = board_view.piece_at_pos(state, pos)
     if p_board is not None and p_board in legal_moves and p_board.J == state.tau:
-        ops.apply_move(state, p_board)
+        engine.apply_move(state, p_board)
         return
 
 

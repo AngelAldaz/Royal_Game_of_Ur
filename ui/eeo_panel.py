@@ -4,13 +4,13 @@ Panel lateral con el vector de estado EEO en tiempo real.
   Ur = ((R_1, M_1), (R_2, M_2)) . ((n_i, J_i, S_i, P_i)) x 8
        . (D_1, D_2, D_3, D_4) . (tau, sigma_D) . ((O_n, U_n, rho_n)) x 20
 
-Nombres mostrados en pantalla coinciden con los del análisis EEO 3.1
-y con los atributos del código (state.R, state.M, state.F, state.D,
-state.tau, state.sigma_D, state.O).
+Lee directamente los atributos definidos en game/eeo.py:
+state.R, state.M, state.F, state.D, state.tau, state.sigma_D y state.C[n]
+(donde state.C[n] expone .O, .U y .rho como en la Tabla 1).
 """
 
 import pygame
-from game import constants as C
+from game import eeo
 from . import theme as T
 from . import widgets
 
@@ -35,8 +35,8 @@ def draw_panel(screen, state, font_big, font_small, font_tiny):
 
     # Jugadores (R_j, M_j)
     y = _section(screen, "Jugadores  (R_j, M_j)", x, y, font_small)
-    j1 = state.R[C.J1], state.M[C.J1]
-    j2 = state.R[C.J2], state.M[C.J2]
+    j1 = state.R[eeo.J1], state.M[eeo.J1]
+    j2 = state.R[eeo.J2], state.M[eeo.J2]
     text = f"J1 = {j1}    J2 = {j2}"
     screen.blit(font_small.render(text, True, T.TEXT), (x + 8, y))
     y += 22
@@ -55,31 +55,31 @@ def draw_panel(screen, state, font_big, font_small, font_tiny):
 
     # Fichas J1 (n_i, J_i, S_i, P_i)
     y = _section(screen, "Fichas J1  (n_i, J_i, S_i, P_i)", x, y + 4, font_tiny)
-    for p in state.pieces_of(C.J1):
+    for p in state.pieces_of(eeo.J1):
         text = f"({p.n}, J1, {p.S}, {p.P})"
         screen.blit(font_tiny.render(text, True, T.TEXT), (x + 8, y))
         y += 16
 
     # Fichas J2
     y = _section(screen, "Fichas J2  (n_i, J_i, S_i, P_i)", x, y + 4, font_tiny)
-    for p in state.pieces_of(C.J2):
+    for p in state.pieces_of(eeo.J2):
         text = f"({p.n}, J2, {p.S}, {p.P})"
         screen.blit(font_tiny.render(text, True, T.TEXT), (x + 8, y))
         y += 16
 
-    # Casillas (O_n, U_n, rho_n)
+    # Casillas (O_n, U_n, rho_n) — leídas directamente de state.C[n]
     y = _section(screen, "Casillas  (O_n, U_n, ρ_n)", x, y + 4, font_tiny)
     col_w = 220
     for sq in range(1, 21):
-        occ = state.O[sq]
-        if occ == 0:
+        casilla = state.C[sq]
+        if casilla.O == 0:
             owner_str = "vacío"
             owner_col = T.TEXT_DIM
         else:
-            owner_str = f"J{occ}"
+            owner_str = f"J{casilla.O}"
             owner_col = T.TEXT
-        rho = "SI" if C.is_rosette(sq) else "NO"
-        text = f"({owner_str}, {sq}, {rho})"
+        rho = "SI" if casilla.rho else "NO"
+        text = f"({owner_str}, {casilla.U}, {rho})"
         col = (sq - 1) // 10
         row = (sq - 1) % 10
         cx = x + 8 + col * col_w

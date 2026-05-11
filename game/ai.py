@@ -4,16 +4,16 @@ IA del oponente.
 Estrategia: Expectiminimax con profundidad parametrizada (default 3) y
 nodos de azar para los dados.
 
-Los nombres de variables siguen la nomenclatura EEO documentada:
-  R   -> reservas        M     -> metas
-  n   -> número de ficha J     -> jugador dueño
-  S   -> estado          P     -> posición en camino
-  D_k -> dado k          tau   -> turno activo    sigma_D -> suma de dados
-  O_n -> ocupante        rho_n -> roseta
+Usa:
+  - eeo.py    : dominios (J1, J2, ESPERA, ACTIVA, NUM_DADOS).
+  - rules.py  : helpers geográficos (square_at, square_of, is_rosette,
+                is_shared, opponent, ROSETA_SEGURA, META_POS).
+  - engine.py : motor de juego (perder_turno, apply_move, legal_moves).
 """
 
-from . import constants as C
-from . import operators as ops
+from . import eeo
+from . import rules
+from . import engine
 
 
 # Probabilidad de obtener una suma sigma_D = s al lanzar 4 dados binarios.
@@ -37,7 +37,7 @@ def evaluate(state, player):
         return -100000
 
     score = 0
-    enemy = C.opponent(player)
+    enemy = rules.opponent(player)
 
     # Fichas en meta (M_j): peso máximo
     score += 1200 * state.M[player]
@@ -49,9 +49,9 @@ def evaluate(state, player):
 
     # Posición / progreso de fichas activas (P_i)
     for piece in state.F:
-        if piece.S != C.ACTIVA:
+        if piece.S != eeo.ACTIVA:
             continue
-        sq = piece.square()
+        sq = rules.square_of(piece)
         weight = 1 if piece.J == player else -1
         # avance lineal en el camino, con bono no lineal cerca de meta
         progress = 8 * piece.P + ((piece.P - 8) ** 2 if piece.P >= 8 else 0)
@@ -60,9 +60,9 @@ def evaluate(state, player):
         if piece.P >= 13:
             score += weight * 60
         # bonos por roseta
-        if sq == C.ROSETA_SEGURA:
+        if sq == rules.ROSETA_SEGURA:
             score += weight * 50  # roseta + segura
-        elif C.is_rosette(sq):
+        elif rules.is_rosette(sq):
             score += weight * 35
 
     # Análisis dinámico de amenazas y oportunidades en zona compartida
@@ -81,31 +81,31 @@ def _threat_score(state, player):
     score = 0
 
     for piece in state.F:
-        if piece.S != C.ACTIVA:
+        if piece.S != eeo.ACTIVA:
             continue
-        sq = piece.square()
-        if not C.is_shared(sq) or sq == C.ROSETA_SEGURA:
+        sq = rules.square_of(piece)
+        if not rules.is_shared(sq) or sq == rules.ROSETA_SEGURA:
             continue
 
         weight = -1 if piece.J == player else 1  # exposición propia es mala
         # Probabilidad de que el rival capture esta ficha el próximo turno
         threats_prob = 0.0
-        threatening = C.opponent(piece.J)
+        threatening = rules.opponent(piece.J)
         for s, prob in DICE_PROB.items():
             if s == 0:
                 continue
             for rival_piece in state.F:
                 if rival_piece.J != threatening:
                     continue
-                if rival_piece.S == C.ESPERA:
+                if rival_piece.S == eeo.ESPERA:
                     new_P = s
-                elif rival_piece.S == C.ACTIVA:
+                elif rival_piece.S == eeo.ACTIVA:
                     new_P = rival_piece.P + s
                 else:
                     continue
-                if new_P > C.META_POS or new_P == C.META_POS:
+                if new_P > rules.META_POS or new_P == rules.META_POS:
                     continue
-                if C.square_at(rival_piece.J, new_P) == sq:
+                if rules.square_at(rival_piece.J, new_P) == sq:
                     threats_prob += prob
                     break  # una amenaza por suma es suficiente
 
@@ -137,20 +137,20 @@ def expectiminimax(state, depth, maximizing_player, alpha=float("-inf"), beta=fl
         expected = 0.0
         for s, prob in DICE_PROB.items():
             child = state.clone()
-            child.D = [1] * s + [0] * (C.NUM_DADOS - s)
+            child.D = [1] * s + [0] * (eeo.NUM_DADOS - s)
             child.dice_rolled = True
             if s == 0:
-                ops.lose_turn(child)
+                engine.perder_turno(child)
                 expected += prob * expectiminimax(child, depth - 1, maximizing_player)
             else:
                 expected += prob * expectiminimax(child, depth, maximizing_player)
         return expected
 
     # Nodo de DECISIÓN
-    moves = ops.legal_moves(state)
+    moves = engine.legal_moves(state)
     if not moves:
         child = state.clone()
-        ops.lose_turn(child)
+        engine.perder_turno(child)
         return expectiminimax(child, depth - 1, maximizing_player)
 
     if state.tau == maximizing_player:
@@ -158,7 +158,7 @@ def expectiminimax(state, depth, maximizing_player, alpha=float("-inf"), beta=fl
         for piece in moves:
             child = state.clone()
             piece_clone = child.get_piece(piece.J, piece.n)
-            ops.apply_move(child, piece_clone)
+            engine.apply_move(child, piece_clone)
             val = expectiminimax(child, depth - 1, maximizing_player, alpha, beta)
             if val > best:
                 best = val
@@ -172,7 +172,7 @@ def expectiminimax(state, depth, maximizing_player, alpha=float("-inf"), beta=fl
         for piece in moves:
             child = state.clone()
             piece_clone = child.get_piece(piece.J, piece.n)
-            ops.apply_move(child, piece_clone)
+            engine.apply_move(child, piece_clone)
             val = expectiminimax(child, depth - 1, maximizing_player, alpha, beta)
             if val < worst:
                 worst = val
@@ -188,7 +188,7 @@ def choose_move(state, depth=3):
     Elige la mejor ficha (F_i) a mover para el jugador en turno (tau)
     usando expectiminimax. Retorna la Piece a mover, o None si no hay jugadas.
     """
-    moves = ops.legal_moves(state)
+    moves = engine.legal_moves(state)
     if not moves:
         return None
 
@@ -200,19 +200,19 @@ def choose_move(state, depth=3):
     # primero los más prometedores (capturas, rosetas, completar).
     def quick_score(piece):
         s = state.sigma_D
-        if piece.S == C.ESPERA:
+        if piece.S == eeo.ESPERA:
             new_P = s
         else:
             new_P = piece.P + s
         score = 0
-        if new_P == C.META_POS:
+        if new_P == rules.META_POS:
             score += 1000  # Operador "Completar ficha"
         else:
-            target = C.square_at(piece.J, new_P)
+            target = rules.square_at(piece.J, new_P)
             if target is not None:
-                if C.is_rosette(target):
+                if rules.is_rosette(target):
                     score += 200  # Operador "Turno extra"
-                if state.occupant_at(target) == C.opponent(piece.J):
+                if state.occupant_at(target) == rules.opponent(piece.J):
                     score += 300  # Operador "Capturar"
                 score += new_P
         return score
@@ -222,7 +222,7 @@ def choose_move(state, depth=3):
     for piece in moves_sorted:
         child = state.clone()
         piece_clone = child.get_piece(piece.J, piece.n)
-        ops.apply_move(child, piece_clone)
+        engine.apply_move(child, piece_clone)
         score = expectiminimax(child, depth, me)
         if score > best_score:
             best_score = score

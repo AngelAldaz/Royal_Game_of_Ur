@@ -1,11 +1,16 @@
 """
 Render del tablero, fichas, reservas/metas e indicadores de turno.
-Usa la nomenclatura EEO: state.tau (turno), state.sigma_D, state.R, state.M,
-state.O, piece.J, piece.S, piece.P, piece.n.
+
+Atributos EEO leídos:
+  state.tau, state.sigma_D, state.R[j], state.M[j], state.C[n].O,
+  piece.J, piece.S, piece.P, piece.n.
+
+Helpers geográficos (square_at, is_rosette, ROSETA_SEGURA) viven en rules.py.
 """
 
 import pygame
-from game import constants as C
+from game import eeo
+from game import rules
 from . import theme as T
 
 
@@ -46,9 +51,9 @@ def draw_board(screen, state, font_small, highlights=None, ai_thinking=False):
 
     # Fichas en el tablero (atributo S = activa)
     for piece in state.F:
-        if piece.S != C.ACTIVA:
+        if piece.S != eeo.ACTIVA:
             continue
-        sq = piece.square()
+        sq = rules.square_of(piece)
         if sq is None:
             continue
         cx, cy = square_center(sq)
@@ -63,8 +68,8 @@ def draw_board(screen, state, font_small, highlights=None, ai_thinking=False):
 
 def _draw_tile(screen, sq):
     rect = square_rect(sq)
-    is_rosette = C.is_rosette(sq)
-    is_safe = (sq == C.ROSETA_SEGURA)
+    is_rosette = rules.is_rosette(sq)
+    is_safe = (sq == rules.ROSETA_SEGURA)
 
     if is_safe:
         base_color = T.ROSETTE_SAFE
@@ -94,7 +99,7 @@ def _draw_tile(screen, sq):
 
 def _draw_piece(screen, cx, cy, J, n, font, radius=24):
     """Dibuja una ficha. J es el dueño (1 o 2), n es el número."""
-    if J == C.J1:
+    if J == eeo.J1:
         base = T.J1_COLOR
         highlight = T.J1_HIGHLIGHT
         shadow = T.J1_SHADOW
@@ -134,25 +139,25 @@ def _draw_reserve_meta(screen, state, font):
         screen.blit(surf, (cx - surf.get_width() // 2, y))
 
     centered_label("Reserva J1", T.TEXT_DIM, j1_reserve_cx, j1_y - 22)
-    centered_label(f"Meta J1: {state.M[C.J1]}/4", T.ACCENT_DIM, j1_meta_cx, j1_y - 22)
+    centered_label(f"Meta J1: {state.M[eeo.J1]}/4", T.ACCENT_DIM, j1_meta_cx, j1_y - 22)
     # Etiquetas de J2 también arriba de la columna (no debajo) para no solapar fichas
     centered_label("Reserva J2", T.TEXT_DIM, j2_reserve_cx, j2_y - 18)
-    centered_label(f"Meta J2: {state.M[C.J2]}/4", T.ACCENT_DIM, j2_meta_cx, j2_y - 18)
+    centered_label(f"Meta J2: {state.M[eeo.J2]}/4", T.ACCENT_DIM, j2_meta_cx, j2_y - 18)
 
-    j1_reserve_pieces = [p for p in state.pieces_of(C.J1) if p.S == C.ESPERA]
-    j2_reserve_pieces = [p for p in state.pieces_of(C.J2) if p.S == C.ESPERA]
-    j1_meta_pieces = [p for p in state.pieces_of(C.J1) if p.S == C.COMPLETADA]
-    j2_meta_pieces = [p for p in state.pieces_of(C.J2) if p.S == C.COMPLETADA]
+    j1_reserve_pieces = [p for p in state.pieces_of(eeo.J1) if p.S == eeo.ESPERA]
+    j2_reserve_pieces = [p for p in state.pieces_of(eeo.J2) if p.S == eeo.ESPERA]
+    j1_meta_pieces = [p for p in state.pieces_of(eeo.J1) if p.S == eeo.COMPLETADA]
+    j2_meta_pieces = [p for p in state.pieces_of(eeo.J2) if p.S == eeo.COMPLETADA]
 
     spacing = 30
     for i, p in enumerate(j1_reserve_pieces):
-        _draw_piece(screen, j1_reserve_cx, j1_y + 18 + i * spacing, C.J1, p.n, font, radius=14)
+        _draw_piece(screen, j1_reserve_cx, j1_y + 18 + i * spacing, eeo.J1, p.n, font, radius=14)
     for i, p in enumerate(j1_meta_pieces):
-        _draw_piece(screen, j1_meta_cx, j1_y + 18 + i * spacing, C.J1, p.n, font, radius=14)
+        _draw_piece(screen, j1_meta_cx, j1_y + 18 + i * spacing, eeo.J1, p.n, font, radius=14)
     for i, p in enumerate(j2_reserve_pieces):
-        _draw_piece(screen, j2_reserve_cx, j2_y + 18 + i * spacing, C.J2, p.n, font, radius=14)
+        _draw_piece(screen, j2_reserve_cx, j2_y + 18 + i * spacing, eeo.J2, p.n, font, radius=14)
     for i, p in enumerate(j2_meta_pieces):
-        _draw_piece(screen, j2_meta_cx, j2_y + 18 + i * spacing, C.J2, p.n, font, radius=14)
+        _draw_piece(screen, j2_meta_cx, j2_y + 18 + i * spacing, eeo.J2, p.n, font, radius=14)
 
 
 def _draw_turn_indicator(screen, state, font, ai_thinking):
@@ -184,9 +189,9 @@ def _draw_turn_indicator(screen, state, font, ai_thinking):
 def piece_at_pos(state, mouse_pos):
     """Devuelve la ficha cuyo casillero contenga el mouse, o None."""
     for piece in state.F:
-        if piece.S != C.ACTIVA:
+        if piece.S != eeo.ACTIVA:
             continue
-        sq = piece.square()
+        sq = rules.square_of(piece)
         if sq is None:
             continue
         rect = square_rect(sq)
@@ -198,12 +203,12 @@ def piece_at_pos(state, mouse_pos):
 def reserve_piece_at_pos(state, mouse_pos):
     """Detecta si el click cayó en una ficha de la reserva del jugador en turno (tau)."""
     cx = 45
-    if state.tau == C.J1:
+    if state.tau == eeo.J1:
         cy_base = T.BOARD_Y + 5 + 18
     else:
         cy_base = T.BOARD_Y + (T.TILE_SIZE + T.TILE_GAP) * 2 + 5 + 18
 
-    reserve_pieces = [p for p in state.pieces_of(state.tau) if p.S == C.ESPERA]
+    reserve_pieces = [p for p in state.pieces_of(state.tau) if p.S == eeo.ESPERA]
     for i, p in enumerate(reserve_pieces):
         cy = cy_base + i * 30
         if (mouse_pos[0] - cx) ** 2 + (mouse_pos[1] - cy) ** 2 <= 16 ** 2:

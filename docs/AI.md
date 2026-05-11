@@ -18,10 +18,14 @@ espacio formalizado en el análisis EEO 3.1.
 - Resultados: ~95 % de victorias contra un agente aleatorio.
 
 > Nota importante: las **variables del código tienen exactamente los mismos
-> nombres que el análisis EEO 3.1**. La IA accede a `state.R`, `state.M`,
-> `state.tau`, `state.sigma_D`, `state.O`, `state.D`, `state.F` y a las
-> propiedades de cada `Piece` (`piece.n`, `piece.J`, `piece.S`, `piece.P`).
-> No hay traducción intermedia: el código *es* el modelo formal.
+> nombres que el análisis EEO 3.1**. [`game/eeo.py`](../game/eeo.py) contiene
+> **solo** lo que aparece en las Tablas 1 y 2 (sin paths, sin helpers, sin
+> orquestador); lo derivado vive en [`rules.py`](../game/rules.py) y
+> [`engine.py`](../game/engine.py). La IA accede a `state.R`, `state.M`,
+> `state.tau`, `state.sigma_D`, `state.D`, `state.F`, `state.C[n].O`
+> (ocupante), `state.C[n].U` (ubicación) y `state.C[n].rho` (roseta), más
+> las propiedades de cada `Piece` (`piece.n`, `piece.J`, `piece.S`,
+> `piece.P`). No hay traducción intermedia: el código *es* el modelo formal.
 
 ---
 
@@ -36,7 +40,9 @@ La función de evaluación lee directamente las variables EEO:
 | `tau` | `state.tau` | Quién decide en cada nodo del árbol |
 | `sigma_D` | `state.sigma_D` | Suma de dados; rama del nodo CHANCE |
 | `D_k` | `state.D[k-1]` | Resultado individual de cada dado |
-| `O_n` | `state.O[n]` | Detección de capturas, bloqueos y rosetas ocupadas |
+| `O_n` | `state.C[n].O` | Detección de capturas, bloqueos y rosetas ocupadas |
+| `U_n` | `state.C[n].U` | Ubicación física (estática, `U_n = n`) |
+| `rho_n` | `state.C[n].rho` | Roseta (estática, `True` para `n ∈ {4, 8, 14, 18, 20}`) |
 | `n_i`, `J_i` | `piece.n`, `piece.J` | Identificación de cada ficha al recorrer el árbol |
 | `S_i` | `piece.S` | `espera`, `activa`, `completada` — filtra movimientos legales |
 | `P_i` | `piece.P` | Posición en el camino — base del progreso heurístico |
@@ -46,8 +52,20 @@ La función de evaluación lee directamente las variables EEO:
 ## 3. Mapeo IA ↔ Tabla 2 (operadores y reglas)
 
 La IA no implementa operadores nuevos: usa **literalmente las mismas funciones**
-del módulo `game/operators.py` que el jugador humano. Cada operador de la
-Tabla 2 corresponde a una rama de la búsqueda y a un componente de la heurística.
+del módulo [`game/eeo.py`](../game/eeo.py) que el jugador humano. Los 8
+operadores de la Tabla 2 están expuestos como funciones en el **orden y con
+los nombres exactos** del análisis:
+
+  1. `lanzar_dados`
+  2. `entrar_ficha`
+  3. `mover_ficha`
+  4. `completar_ficha`
+  5. `capturar_ficha`
+  6. `obtener_turno_extra`
+  7. `cambiar_turno`
+  8. `perder_turno`
+
+`engine.apply_move` es el orquestador que los compone según el caso.
 
 ### Operador 1 — Lanzar dados
 
@@ -102,31 +120,7 @@ progress = 8·P_i + (P_i − 8)²    si P_i ≥ 8    # acelera cerca de la meta
 
 Esto refleja que avanzar de 13→14 vale más que avanzar de 1→2.
 
-### Operador 4 — Capturar ficha rival
-
-```
-Condición:  O_destino = J_rival ∧ U_destino ∈ {5..12} ∧ rho_destino = NO
-Efecto:     S_rival: activa→espera,  P_rival = 0,  R_rival += 1
-```
-
-**En la IA:** la captura es un evento muy valorado. En el ordenamiento de
-movimientos:
-
-```python
-if state.O[target] == oponente:
-    quick_score += 300   # explora capturas primero -> mejor poda
-```
-
-Y en la heurística, capturar produce:
-- `+12` por el `R_rival` que aumenta
-- En el siguiente turno, la ficha capturada estará en espera, por lo que el
-  rival pierde el progreso `P_i`-related que tenía.
-
-Además, `_threat_score()` mide cuántas sumas `sigma_D` permitirían al rival
-capturarte a ti (probabilidad ponderada hasta 60 puntos), evitando jugadas
-suicidas.
-
-### Operador 5 — Completar ficha
+### Operador 4 — Completar ficha
 
 ```
 Condición:  S_i = activa ∧ P_i + sigma_D = 15 (suma exacta)
@@ -141,6 +135,30 @@ score += 1200 · M_j     # cada ficha en meta vale 1200
 
 En el ordenamiento heurístico, `quick_score = +1000` para completar — siempre
 se explora primero.
+
+### Operador 5 — Capturar ficha rival
+
+```
+Condición:  O_destino = J_rival ∧ U_destino ∈ {5..12} ∧ rho_destino = NO
+Efecto:     S_rival: activa→espera,  P_rival = 0,  R_rival += 1
+```
+
+**En la IA:** la captura es un evento muy valorado. En el ordenamiento de
+movimientos:
+
+```python
+if state.occupant_at(target) == rules.opponent(piece.J):
+    quick_score += 300   # explora capturas primero -> mejor poda
+```
+
+Y en la heurística, capturar produce:
+- `+12` por el `R_rival` que aumenta
+- En el siguiente turno, la ficha capturada estará en espera, por lo que el
+  rival pierde el progreso `P_i`-related que tenía.
+
+Además, `_threat_score()` mide cuántas sumas `sigma_D` permitirían al rival
+capturarte a ti (probabilidad ponderada hasta 60 puntos), evitando jugadas
+suicidas.
 
 ### Operador 6 — Obtener turno extra (roseta)
 
@@ -158,7 +176,7 @@ asigna:
 En el ordenamiento de movimientos:
 
 ```python
-if C.is_rosette(target):
+if rules.is_rosette(target):
     quick_score += 200
 ```
 
@@ -196,7 +214,7 @@ Efecto:     tau = J_opuesto
 
 ```python
 if s == 0:
-    ops.lose_turn(child)
+    engine.perder_turno(child)
     expected += prob · expectiminimax(child, depth-1, ...)
 ```
 
@@ -220,9 +238,9 @@ Nodo CHANCE (Operador 1: Lanzar dados)
         Nodo MAX (mi decisión)
         Movimientos legales en este sigma_D:
             ├── Mover F_1  (Op 3)
-            ├── Mover F_2  (Op 3 + posible Op 4 captura)
+            ├── Mover F_2  (Op 3 + posible Op 5 captura)
             ├── Entrar F_3 (Op 2)
-            └── Completar F_4 (Op 5)
+            └── Completar F_4 (Op 4)
                     │
                     ▼
               Si rho_destino = NO:
@@ -285,19 +303,50 @@ Esto lo convierte en una heurística **probabilísticamente informada**.
 
 ## 7. Trazabilidad código ↔ análisis EEO
 
-| Componente del análisis 3.1 | Código |
-| --------------------------- | ------ |
-| Tabla 1 (entidades, atributos) | [`game/state.py`](../game/state.py) — clases `Piece` y `GameState` con atributos `R, M, F, D, tau, O` y `n, J, S, P` |
-| Tabla 2 — Op. 1 Lanzar dados | `roll_dice(state)` en [`operators.py`](../game/operators.py) |
-| Tabla 2 — Op. 2 Entrar ficha | rama `S == ESPERA` de `apply_move` |
-| Tabla 2 — Op. 3 Mover ficha | rama `S == ACTIVA` de `apply_move` |
-| Tabla 2 — Op. 4 Capturar | bloque "rival_occupant != 0..." dentro de `apply_move` |
-| Tabla 2 — Op. 5 Completar | rama `new_P == META_POS` de `apply_move` |
-| Tabla 2 — Op. 6 Turno extra | bloque `if C.is_rosette(landed_square): info["extra_turn"] = True` |
-| Tabla 2 — Op. 7 Cambiar turno | `change_turn(state)` |
-| Tabla 2 — Op. 8 Perder turno | `lose_turn(state)` |
-| Espacio de estados S | Dominio de la búsqueda (cada nodo es un `GameState`) |
-| Vector de 102 componentes | Visible en el panel EEO de la UI en tiempo real |
+[`game/eeo.py`](../game/eeo.py) contiene **exclusivamente** lo que está en las
+Tablas 1 y 2 del análisis, sin ruido. Todo lo demás (paths, zonas, helpers,
+orquestador, control de turno) vive en archivos separados:
+
+  - [`game/eeo.py`](../game/eeo.py)    — Tabla 1 (entidades + dominios) y Tabla 2 (8 operadores).
+  - [`game/rules.py`](../game/rules.py) — reglas derivadas: `PATH_J1`, `PATH_J2`, `META_POS`, `CASILLAS_*`, `ROSETA_SEGURA`, helpers (`square_at`, `square_of`, `is_rosette`, `is_shared`, `opponent`).
+  - [`game/engine.py`](../game/engine.py) — `Game` (extiende `GameState` con `dice_rolled`, `last_event`, `winner`), `apply_move` (orquestador) y `legal_moves` (consulta).
+
+### Tabla 1 — entidades y dominios (en `eeo.py`)
+
+| Tabla 1 | Código |
+| ------- | ------ |
+| Clases: `Casilla` (`O`, `U`, `rho`), `Piece` (`n`, `J`, `S`, `P`), `GameState` (`R`, `M`, `F`, `D`, `tau`, `sigma_D`, `C[n]`) | atributos exactos según las columnas "Variable" de la Tabla 1 |
+| Dominios: `J1`, `J2`, `ESPERA`, `ACTIVA`, `COMPLETADA`, `ROSETAS` | constantes |
+| Cardinalidades: `FICHAS_POR_JUGADOR = 4`, `NUM_DADOS = 4`, `NUM_CASILLAS = 20` | constantes |
+
+### Tabla 2 — operadores (en `eeo.py`, en el orden exacto del análisis)
+
+| Nº | Operador               | Función en `eeo.py`                              |
+| -- | ---------------------- | ------------------------------------------------ |
+| 1  | Lanzar dados           | `lanzar_dados(state)`                            |
+| 2  | Entrar ficha al tablero | `entrar_ficha(state, piece, target)`            |
+| 3  | Mover ficha            | `mover_ficha(state, piece, origin, target)`     |
+| 4  | Completar ficha        | `completar_ficha(state, piece, origin)`         |
+| 5  | Capturar ficha rival   | `capturar_ficha(state, rival)`                  |
+| 6  | Obtener turno extra    | `obtener_turno_extra(state)`                    |
+| 7  | Cambiar turno          | `cambiar_turno(state)`                          |
+| 8  | Perder turno           | `perder_turno(state)`                           |
+
+### Lo que NO está en las tablas (vive fuera de `eeo.py`)
+
+| Concepto                          | Código |
+| --------------------------------- | ------ |
+| Camino `P_i → U_n` por jugador    | `rules.PATH_J1`, `rules.PATH_J2`, `rules.path_for`, `rules.square_at`, `rules.square_of` |
+| Posición transitoria a meta       | `rules.META_POS = 15` |
+| Zonas del tablero                 | `rules.CASILLAS_COMPARTIDAS`, `rules.CASILLAS_PRIVADAS_J1`, `rules.CASILLAS_PRIVADAS_J2` |
+| Roseta 8 inmune a captura         | `rules.ROSETA_SEGURA` |
+| Helpers                           | `rules.is_rosette`, `rules.is_shared`, `rules.opponent` |
+| Estado de sesión (control turno)  | `engine.Game` (campos `dice_rolled`, `last_event`, `winner`; métodos `is_terminal`, `pieces_of`, `get_piece`, `occupant_at`, `piece_at_square`, `clone`) |
+| Wrapper de bookkeeping            | `engine.lanzar_dados` (Op. 1 + marca dados), `engine.perder_turno` (Op. 8 + limpia dados) |
+| Orquestador de un movimiento      | `engine.apply_move(state, piece)` compone Op. 2/3, 5, 4, 6 y 7 |
+| Consulta de movimientos legales   | `engine.legal_moves(state)` |
+| Espacio de estados S              | Dominio de la búsqueda (cada nodo es un `engine.Game`) |
+| Vector de 102 componentes         | Visible en el panel EEO de la UI en tiempo real |
 
 ---
 
@@ -310,11 +359,15 @@ la esperanza ponderada por probabilidad. Es la generalización estándar de
 Minimax para juegos con azar (Russell & Norvig, *AI: A Modern Approach*).
 
 **P: ¿Cómo conecta el código con el análisis EEO?**
-R: Las clases del modelo (`GameState`, `Piece`) usan EXACTAMENTE las mismas
-variables del análisis (Tabla 1). Cada operador de la Tabla 2 está
-implementado como una función o rama del archivo `operators.py`. La IA
-opera sobre ese mismo modelo: `legal_moves()` aplica las condiciones de
-aplicabilidad, `apply_move()` aplica los efectos. No hay traducción.
+R: Toda la Tabla 1 y la Tabla 2 viven en un único archivo:
+[`game/eeo.py`](../game/eeo.py). Las clases del modelo (`Casilla`, `Piece`,
+`GameState`) usan EXACTAMENTE las mismas variables del análisis (Tabla 1).
+Cada operador de la Tabla 2 es una función con su nombre en español
+(`lanzar_dados`, `entrar_ficha`, `mover_ficha`, `capturar_ficha`,
+`completar_ficha`, `obtener_turno_extra`, `cambiar_turno`, `perder_turno`),
+con la fila correspondiente de la Tabla 2 como docstring. La IA opera sobre
+ese mismo modelo: `legal_moves()` aplica las condiciones de aplicabilidad y
+`apply_move()` orquesta los efectos. No hay traducción.
 
 **P: ¿La IA es determinista?**
 R: La heurística sí: dado el mismo estado y los mismos dados, siempre elige
