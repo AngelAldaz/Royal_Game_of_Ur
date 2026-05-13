@@ -139,10 +139,10 @@ def _draw_reserve_meta(screen, state, font):
         screen.blit(surf, (cx - surf.get_width() // 2, y))
 
     centered_label("Reserva J1", T.TEXT_DIM, j1_reserve_cx, j1_y - 22)
-    centered_label(f"Meta J1: {state.M[eeo.J_1]}/4", T.ACCENT_DIM, j1_meta_cx, j1_y - 22)
+    centered_label(f"Meta J1: {state.J[eeo.J_1].M}/4", T.ACCENT_DIM, j1_meta_cx, j1_y - 22)
     # Etiquetas de J2 también arriba de la columna (no debajo) para no solapar fichas
     centered_label("Reserva J2", T.TEXT_DIM, j2_reserve_cx, j2_y - 18)
-    centered_label(f"Meta J2: {state.M[eeo.J_2]}/4", T.ACCENT_DIM, j2_meta_cx, j2_y - 18)
+    centered_label(f"Meta J2: {state.J[eeo.J_2].M}/4", T.ACCENT_DIM, j2_meta_cx, j2_y - 18)
 
     j1_reserve_pieces = [p for p in state.pieces_of(eeo.J_1) if p.S == eeo.espera]
     j2_reserve_pieces = [p for p in state.pieces_of(eeo.J_2) if p.S == eeo.espera]
@@ -168,16 +168,16 @@ def _draw_turn_indicator(screen, state, font, ai_thinking):
 
     cx = box_rect.x + 40
     cy = box_rect.centery
-    _draw_piece(screen, cx, cy, state.τ, state.τ, font, radius=24)
+    _draw_piece(screen, cx, cy, state.T.τ, state.T.τ, font, radius=24)
 
-    msg1 = f"Turno del Jugador {state.τ}  (τ = J{state.τ})"
+    msg1 = f"Turno del Jugador {state.T.τ}  (τ = J{state.T.τ})"
     if ai_thinking:
         msg2 = "IA pensando..."
     elif state.dice_rolled:
-        if state.ΣD == 0:
+        if state.T.ΣD == 0:
             msg2 = f"ΣD = 0 — pasa turno"
         else:
-            msg2 = f"ΣD = {state.ΣD} — selecciona ficha"
+            msg2 = f"ΣD = {state.T.ΣD} — selecciona ficha"
     else:
         msg2 = "Lanza los dados"
 
@@ -203,12 +203,12 @@ def piece_at_pos(state, mouse_pos):
 def reserve_piece_at_pos(state, mouse_pos):
     """Detecta si el click cayó en una ficha de la reserva del jugador en turno (tau)."""
     cx = 45
-    if state.τ == eeo.J_1:
+    if state.T.τ == eeo.J_1:
         cy_base = T.BOARD_Y + 5 + 18
     else:
         cy_base = T.BOARD_Y + (T.TILE_SIZE + T.TILE_GAP) * 2 + 5 + 18
 
-    reserve_pieces = [p for p in state.pieces_of(state.τ) if p.S == eeo.espera]
+    reserve_pieces = [p for p in state.pieces_of(state.T.τ) if p.S == eeo.espera]
     for i, p in enumerate(reserve_pieces):
         cy = cy_base + i * 30
         if (mouse_pos[0] - cx) ** 2 + (mouse_pos[1] - cy) ** 2 <= 16 ** 2:

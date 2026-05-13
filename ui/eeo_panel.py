@@ -35,21 +35,21 @@ def draw_panel(screen, state, font_big, font_small, font_tiny):
 
     # Jugadores (R_j, M_j)
     y = _section(screen, "Jugadores  (R_j, M_j)", x, y, font_small)
-    j1 = state.R[eeo.J_1], state.M[eeo.J_1]
-    j2 = state.R[eeo.J_2], state.M[eeo.J_2]
+    j1 = state.J[eeo.J_1].R, state.J[eeo.J_1].M
+    j2 = state.J[eeo.J_2].R, state.J[eeo.J_2].M
     text = f"J_1 = {j1}    J_2 = {j2}"
     screen.blit(font_small.render(text, True, T.TEXT), (x + 8, y))
     y += 22
 
     # Tablero (τ, ΣD)
     y = _section(screen, "Tablero  (τ, ΣD)", x, y + 4, font_small)
-    text = f"τ = J_{state.τ}    ΣD = {state.ΣD}"
+    text = f"τ = J_{state.T.τ}    ΣD = {state.T.ΣD}"
     screen.blit(font_small.render(text, True, T.TEXT), (x + 8, y))
     y += 22
 
     # Dados (D_k)
     y = _section(screen, "Dados  (D_1, D_2, D_3, D_4)", x, y + 4, font_small)
-    text = f"({state.D[1]}, {state.D[2]}, {state.D[3]}, {state.D[4]})"
+    text = f"({state.D[1].D}, {state.D[2].D}, {state.D[3].D}, {state.D[4].D})"
     screen.blit(font_small.render(text, True, T.TEXT), (x + 8, y))
     y += 22
 

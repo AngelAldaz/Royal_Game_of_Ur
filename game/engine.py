@@ -1,8 +1,7 @@
 """
-Motor del juego: orquesta los operadores literales de `eeo.py` (Tabla 2)
-con los helpers de `rules.py`, y añade el control de sesión que NO es
-parte del modelo EEO formal (banderas de turno, descripción del último
-evento, jugador ganador).
+Motor del juego: orquesta los operadores literales de eeo.py (Tabla 2)
+con los helpers de rules.py, y añade control de sesión (dice_rolled,
+last_event, winner) que NO es parte del modelo EEO.
 """
 
 from . import eeo
@@ -10,7 +9,7 @@ from . import rules
 
 
 class Game(eeo.Ur):
-    """Ur + control de sesión (dice_rolled, last_event, winner)."""
+    """Ur + control de sesión."""
 
     __slots__ = ("dice_rolled", "last_event", "winner")
 
@@ -47,16 +46,26 @@ class Game(eeo.Ur):
 
     def clone(self):
         new = Game.__new__(Game)
-        new.R = dict(self.R)
-        new.M = dict(self.M)
-        new.F = {i: eeo.Ficha.__new__(eeo.Ficha) for i in self.F}
+        new.J = {}
+        for j, jugador in self.J.items():
+            new.J[j] = eeo.Jugador.__new__(eeo.Jugador)
+            new.J[j].R = jugador.R
+            new.J[j].M = jugador.M
+        new.F = {}
         for i, f in self.F.items():
+            new.F[i] = eeo.Ficha.__new__(eeo.Ficha)
             new.F[i].n, new.F[i].J = f.n, f.J
             new.F[i].S, new.F[i].P = f.S, f.P
-        new.D = dict(self.D)
-        new.τ = self.τ
-        new.C = {n: eeo.Casilla.__new__(eeo.Casilla) for n in self.C}
+        new.D = {}
+        for k, d in self.D.items():
+            new.D[k] = eeo.Dado.__new__(eeo.Dado)
+            new.D[k].D = d.D
+        new.T = eeo.Tablero.__new__(eeo.Tablero)
+        new.T.τ = self.T.τ
+        new.T.ΣD = self.T.ΣD
+        new.C = {}
         for n, c in self.C.items():
+            new.C[n] = eeo.Casilla.__new__(eeo.Casilla)
             new.C[n].O, new.C[n].U, new.C[n].ρ = c.O, c.U, c.ρ
         new.dice_rolled = self.dice_rolled
         new.last_event = self.last_event
@@ -68,26 +77,27 @@ def lanzar_dados(game):
     """Operador 1 + bookkeeping (marca dados lanzados)."""
     eeo.lanzar_dados(game)
     game.dice_rolled = True
-    game.last_event = f"Jugador {game.τ} lanza dados: ΣD = {game.ΣD}"
+    game.last_event = f"Jugador {game.T.τ} lanza dados: ΣD = {game.T.ΣD}"
 
 
 def perder_turno(game):
-    """Operador 8 + bookkeeping (limpia dados)."""
-    game.last_event = f"Jugador {game.τ} pierde turno (ΣD = {game.ΣD})"
+    """Operador 8 + bookkeeping (limpia dados y ΣD)."""
+    game.last_event = f"Jugador {game.T.τ} pierde turno (ΣD = {game.T.ΣD})"
     eeo.perder_turno(game)
     for k in game.D:
-        game.D[k] = 0
+        game.D[k].D = 0
+    game.T.ΣD = 0
     game.dice_rolled = False
 
 
 def legal_moves(game):
     """Fichas movibles para τ con ΣD actual."""
-    if game.ΣD == 0 or game.is_terminal():
+    if game.T.ΣD == 0 or game.is_terminal():
         return []
 
     moves = []
-    s = game.ΣD
-    for F_i in game.pieces_of(game.τ):
+    s = game.T.ΣD
+    for F_i in game.pieces_of(game.T.τ):
         if F_i.S == eeo.completada:
             continue
 
@@ -112,17 +122,17 @@ def legal_moves(game):
 
 def apply_move(game, F_i):
     """
-    Aplica la jugada componiendo los operadores 2-7 según el caso:
+    Compone los operadores 2-7 de la Tabla 2 según el caso:
 
-        S_i = espera                  →  (Op.5 Capturar + ) Op.2 Entrar
-        S_i = activa, P_i + ΣD < 15   →  (Op.5 Capturar + ) Op.3 Mover
-        S_i = activa, P_i + ΣD = 15   →  Op.4 Completar
-        Luego  Op.6 (ρ_destino = sí)  o  Op.7 (ρ_destino = no).
+        S_i = espera                   →  (Op.5 Capturar + ) Op.2 Entrar
+        S_i = activa, P_i + ΣD < 15    →  (Op.5 Capturar + ) Op.3 Mover
+        S_i = activa, P_i + ΣD = 15    →  Op.4 Completar
+        Luego Op.6 (ρ_destino = sí)  o  Op.7 (ρ_destino = no).
     """
-    assert F_i.J == game.τ
-    assert game.ΣD > 0
+    assert F_i.J == game.T.τ
+    assert game.T.ΣD > 0
 
-    s = game.ΣD
+    s = game.T.ΣD
     info = {"captured": None, "completed": False, "extra_turn": False,
             "entered": False, "event": ""}
 
@@ -146,7 +156,7 @@ def apply_move(game, F_i):
             eeo.completar_ficha(game, F_i, origen)
             info["completed"] = True
             info["event"] = f"J{F_i.J} completa ficha {F_i.n} (a meta)"
-            if game.M[F_i.J] == 4:
+            if game.J[F_i.J].M == 4:
                 game.winner = F_i.J
         else:
             destino = rules.square_at(F_i.J, new_P)
@@ -175,7 +185,8 @@ def apply_move(game, F_i):
     game.last_event = descr
 
     for k in game.D:
-        game.D[k] = 0
+        game.D[k].D = 0
+    game.T.ΣD = 0
     game.dice_rolled = False
 
     return info

@@ -21,7 +21,7 @@ def draw_dice(screen, state, font, x=60, y=620):
     y_dice = y + 14
 
     for k in range(1, 5):
-        val = state.D[k]
+        val = state.D[k].D
         dx = x + (k - 1) * (size + gap)
         points = [
             (dx + size // 2, y_dice + 4),
@@ -42,7 +42,7 @@ def draw_dice(screen, state, font, x=60, y=620):
     # Suma ΣD
     label_x = x + 4 * (size + gap) + 20
     if state.dice_rolled:
-        sum_label = f"ΣD = {state.ΣD}"
+        sum_label = f"ΣD = {state.T.ΣD}"
         font_big = pygame.font.SysFont("arial", 32, bold=True)
         txt = font_big.render(sum_label, True, T.ACCENT)
         screen.blit(txt, (label_x, y_dice + 8))

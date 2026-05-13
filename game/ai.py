@@ -1,8 +1,6 @@
 """
-IA del oponente.
-
-Estrategia: Expectiminimax con profundidad parametrizada (default 3) y
-nodos de azar para los dados.
+IA del oponente — Expectiminimax con poda alfa-beta y nodos de azar
+para los 4 dados.
 """
 
 from . import eeo
@@ -10,7 +8,7 @@ from . import rules
 from . import engine
 
 
-# P(ΣD = s) con 4 dados binarios: distribución binomial B(4, 0.5).
+# P(ΣD = s) con 4 dados binarios — binomial B(4, 0.5).
 DICE_PROB = {0: 1/16, 1: 4/16, 2: 6/16, 3: 4/16, 4: 1/16}
 
 
@@ -24,15 +22,11 @@ def evaluate(state, player):
     score = 0
     enemy = rules.opponent(player)
 
-    # M_j en meta — peso máximo
-    score += 1200 * state.M[player]
-    score -= 1200 * state.M[enemy]
+    score += 1200 * state.J[player].M
+    score -= 1200 * state.J[enemy].M
+    score += 12 * state.J[enemy].R
+    score -= 12 * state.J[player].R
 
-    # R_j en reserva — bueno para nosotros que el rival tenga muchas
-    score += 12 * state.R[enemy]
-    score -= 12 * state.R[player]
-
-    # Progreso de fichas activas
     for F_i in state.F.values():
         if F_i.S != eeo.activa:
             continue
@@ -52,10 +46,7 @@ def evaluate(state, player):
 
 
 def _threat_score(state, player):
-    """
-    Para cada ficha activa en zona compartida (no segura), calcula la
-    probabilidad de que el rival la pueda capturar en su próximo turno.
-    """
+    """Probabilidad de captura por el rival sobre fichas en zona compartida."""
     score = 0
     for F_i in state.F.values():
         if F_i.S != eeo.activa:
@@ -102,7 +93,8 @@ def expectiminimax(state, depth, maximizing_player, alpha=float("-inf"), beta=fl
         for s, prob in DICE_PROB.items():
             child = state.clone()
             for k in range(1, 5):
-                child.D[k] = 1 if k <= s else 0
+                child.D[k].D = 1 if k <= s else 0
+            child.T.ΣD = s
             child.dice_rolled = True
             if s == 0:
                 engine.perder_turno(child)
@@ -117,7 +109,7 @@ def expectiminimax(state, depth, maximizing_player, alpha=float("-inf"), beta=fl
         engine.perder_turno(child)
         return expectiminimax(child, depth - 1, maximizing_player)
 
-    if state.τ == maximizing_player:
+    if state.T.τ == maximizing_player:
         best = float("-inf")
         for F_i in moves:
             child = state.clone()
@@ -153,12 +145,12 @@ def choose_move(state, depth=3):
     if not moves:
         return None
 
-    me = state.τ
+    me = state.T.τ
     best_score = float("-inf")
     best_F_i = moves[0]
 
     def quick_score(F_i):
-        s = state.ΣD
+        s = state.T.ΣD
         new_P = s if F_i.S == eeo.espera else F_i.P + s
         score = 0
         if new_P == rules.META_POS:

@@ -82,7 +82,7 @@ def main():
                 menu.handle(event)
 
             elif app_state == STATE_PLAY:
-                is_ai_turn = (mode == menus.Menu.MODE_AI and game_state.τ == eeo.J_2)
+                is_ai_turn = (mode == menus.Menu.MODE_AI and game_state.T.τ == eeo.J_2)
                 if not is_ai_turn:
                     roll_btn.handle(event)
                     pass_btn.handle(event)
@@ -123,13 +123,13 @@ def main():
 
             def make_pass_cb(state):
                 def cb():
-                    if state.dice_rolled and (state.ΣD == 0 or not engine.legal_moves(state)):
+                    if state.dice_rolled and (state.T.ΣD == 0 or not engine.legal_moves(state)):
                         engine.perder_turno(state)
                 return cb
             pass_btn.callback = make_pass_cb(game_state)
 
             # ---- TURNO DE LA IA ----
-            is_ai_turn = (mode == menus.Menu.MODE_AI and game_state.τ == eeo.J_2)
+            is_ai_turn = (mode == menus.Menu.MODE_AI and game_state.T.τ == eeo.J_2)
             if is_ai_turn and not game_state.is_terminal():
                 if not game_state.dice_rolled:
                     # Fase 1: la IA va a lanzar dados
@@ -163,10 +163,10 @@ def main():
             # ---- Movimientos legales y estado de botones ----
             if game_state.dice_rolled and not game_state.is_terminal():
                 legal_moves_list = engine.legal_moves(game_state)
-                pass_btn.enabled = (game_state.ΣD == 0 or len(legal_moves_list) == 0)
+                pass_btn.enabled = (game_state.T.ΣD == 0 or len(legal_moves_list) == 0)
                 roll_btn.enabled = False
                 # Auto-pasar turno (humano) si no hay jugadas posibles
-                is_human_turn = not (mode == menus.Menu.MODE_AI and game_state.τ == eeo.J_2)
+                is_human_turn = not (mode == menus.Menu.MODE_AI and game_state.T.τ == eeo.J_2)
                 if is_human_turn and pass_btn.enabled:
                     if auto_pass_until == 0.0:
                         auto_pass_until = now + 1.5
@@ -204,7 +204,7 @@ def main():
         else:
             menus._draw_background(screen)
             highlights = _highlights_for(game_state, legal_moves_list)
-            is_ai_turn = (mode == menus.Menu.MODE_AI and game_state.τ == eeo.J_2)
+            is_ai_turn = (mode == menus.Menu.MODE_AI and game_state.T.τ == eeo.J_2)
             ai_thinking = is_ai_turn and ai_phase != "idle"
             board_view.draw_board(screen, game_state, font_small,
                                   highlights=highlights, ai_thinking=ai_thinking)
@@ -225,9 +225,9 @@ def main():
 def _highlights_for(state, legal_moves):
     """Devuelve lista de (square, color) para resaltar movimientos legales."""
     out = []
-    if not legal_moves or state.ΣD == 0 or not state.dice_rolled:
+    if not legal_moves or state.T.ΣD == 0 or not state.dice_rolled:
         return out
-    s = state.ΣD
+    s = state.T.ΣD
     for piece in legal_moves:
         if piece.S != eeo.espera and piece.S != eeo.activa:
             continue
@@ -246,7 +246,7 @@ def _highlights_for(state, legal_moves):
 
 def _handle_play_click(pos, state, legal_moves):
     """Procesa un click izquierdo durante la fase de juego (turno humano)."""
-    if state.is_terminal() or not state.dice_rolled or state.ΣD == 0:
+    if state.is_terminal() or not state.dice_rolled or state.T.ΣD == 0:
         return
 
     # Click sobre ficha en reserva
