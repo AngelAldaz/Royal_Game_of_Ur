@@ -257,7 +257,7 @@ def _handle_play_click(pos, state, legal_moves):
 
     # Click sobre ficha en tablero
     p_board = board_view.piece_at_pos(state, pos)
-    if p_board is not None and p_board in legal_moves and p_board.J == state.τ:
+    if p_board is not None and p_board in legal_moves and p_board.J == state.T.τ:
         engine.apply_move(state, p_board)
         return
 
