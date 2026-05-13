@@ -2,11 +2,11 @@
 Panel lateral con el vector de estado EEO en tiempo real.
 
   Ur = ((R_1, M_1), (R_2, M_2)) . ((n_i, J_i, S_i, P_i)) x 8
-       . (D_1, D_2, D_3, D_4) . (tau, sigma_D) . ((O_n, U_n, rho_n)) x 20
+       . (D_1, D_2, D_3, D_4) . (τ, ΣD) . ((O_n, U_n, ρ_n)) x 20
 
 Lee directamente los atributos definidos en game/eeo.py:
-state.R, state.M, state.F, state.D, state.tau, state.sigma_D y state.C[n]
-(donde state.C[n] expone .O, .U y .rho como en la Tabla 1).
+state.R, state.M, state.F, state.D, state.τ, state.ΣD y state.C[n]
+(donde state.C[n] expone .O, .U y .ρ como en la Tabla 1).
 """
 
 import pygame
@@ -35,39 +35,39 @@ def draw_panel(screen, state, font_big, font_small, font_tiny):
 
     # Jugadores (R_j, M_j)
     y = _section(screen, "Jugadores  (R_j, M_j)", x, y, font_small)
-    j1 = state.R[eeo.J1], state.M[eeo.J1]
-    j2 = state.R[eeo.J2], state.M[eeo.J2]
-    text = f"J1 = {j1}    J2 = {j2}"
+    j1 = state.R[eeo.J_1], state.M[eeo.J_1]
+    j2 = state.R[eeo.J_2], state.M[eeo.J_2]
+    text = f"J_1 = {j1}    J_2 = {j2}"
     screen.blit(font_small.render(text, True, T.TEXT), (x + 8, y))
     y += 22
 
-    # Tablero (tau, sigma_D)
+    # Tablero (τ, ΣD)
     y = _section(screen, "Tablero  (τ, ΣD)", x, y + 4, font_small)
-    text = f"τ = J{state.tau}    ΣD = {state.sigma_D}"
+    text = f"τ = J_{state.τ}    ΣD = {state.ΣD}"
     screen.blit(font_small.render(text, True, T.TEXT), (x + 8, y))
     y += 22
 
     # Dados (D_k)
     y = _section(screen, "Dados  (D_1, D_2, D_3, D_4)", x, y + 4, font_small)
-    text = f"({state.D[0]}, {state.D[1]}, {state.D[2]}, {state.D[3]})"
+    text = f"({state.D[1]}, {state.D[2]}, {state.D[3]}, {state.D[4]})"
     screen.blit(font_small.render(text, True, T.TEXT), (x + 8, y))
     y += 22
 
-    # Fichas J1 (n_i, J_i, S_i, P_i)
-    y = _section(screen, "Fichas J1  (n_i, J_i, S_i, P_i)", x, y + 4, font_tiny)
-    for p in state.pieces_of(eeo.J1):
-        text = f"({p.n}, J1, {p.S}, {p.P})"
+    # Fichas J_1 (n_i, J_i, S_i, P_i)
+    y = _section(screen, "Fichas J_1  (n_i, J_i, S_i, P_i)", x, y + 4, font_tiny)
+    for p in state.pieces_of(eeo.J_1):
+        text = f"({p.n}, J_1, {p.S}, {p.P})"
         screen.blit(font_tiny.render(text, True, T.TEXT), (x + 8, y))
         y += 16
 
-    # Fichas J2
-    y = _section(screen, "Fichas J2  (n_i, J_i, S_i, P_i)", x, y + 4, font_tiny)
-    for p in state.pieces_of(eeo.J2):
-        text = f"({p.n}, J2, {p.S}, {p.P})"
+    # Fichas J_2
+    y = _section(screen, "Fichas J_2  (n_i, J_i, S_i, P_i)", x, y + 4, font_tiny)
+    for p in state.pieces_of(eeo.J_2):
+        text = f"({p.n}, J_2, {p.S}, {p.P})"
         screen.blit(font_tiny.render(text, True, T.TEXT), (x + 8, y))
         y += 16
 
-    # Casillas (O_n, U_n, rho_n) — leídas directamente de state.C[n]
+    # Casillas (O_n, U_n, ρ_n) — leídas directamente de state.C[n]
     y = _section(screen, "Casillas  (O_n, U_n, ρ_n)", x, y + 4, font_tiny)
     col_w = 220
     for sq in range(1, 21):
@@ -76,10 +76,10 @@ def draw_panel(screen, state, font_big, font_small, font_tiny):
             owner_str = "vacío"
             owner_col = T.TEXT_DIM
         else:
-            owner_str = f"J{casilla.O}"
+            owner_str = f"J_{casilla.O}"
             owner_col = T.TEXT
-        rho = "SI" if casilla.rho else "NO"
-        text = f"({owner_str}, {casilla.U}, {rho})"
+        ρ = "SI" if casilla.ρ else "NO"
+        text = f"({owner_str}, {casilla.U}, {ρ})"
         col = (sq - 1) // 10
         row = (sq - 1) % 10
         cx = x + 8 + col * col_w

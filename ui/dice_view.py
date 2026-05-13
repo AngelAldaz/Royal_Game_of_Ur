@@ -1,5 +1,5 @@
 """
-Render de los 4 dados tetraédricos (D_1..D_4) con su suma sigma_D.
+Render de los 4 dados tetraédricos (D_1..D_4) con su suma ΣD.
 """
 
 import pygame
@@ -7,7 +7,7 @@ from . import theme as T
 
 
 def draw_dice(screen, state, font, x=60, y=620):
-    """Dibuja los 4 dados D_1..D_4 y la suma sigma_D."""
+    """Dibuja los 4 dados D_1..D_4 y la suma ΣD."""
     size = 56
     gap = 14
 
@@ -20,8 +20,9 @@ def draw_dice(screen, state, font, x=60, y=620):
     screen.blit(label, (x, y - 8))
     y_dice = y + 14
 
-    for i, val in enumerate(state.D):
-        dx = x + i * (size + gap)
+    for k in range(1, 5):
+        val = state.D[k]
+        dx = x + (k - 1) * (size + gap)
         points = [
             (dx + size // 2, y_dice + 4),
             (dx + 4, y_dice + size - 4),
@@ -35,13 +36,13 @@ def draw_dice(screen, state, font, x=60, y=620):
         if val == 1:
             pygame.draw.circle(screen, T.DICE_DOT, (points[0][0], points[0][1] + 14), 6)
 
-        idx = font.render(f"D{i+1}", True, T.TEXT_DIM)
+        idx = font.render(f"D_{k}", True, T.TEXT_DIM)
         screen.blit(idx, (dx + size // 2 - idx.get_width() // 2, y_dice + size + 2))
 
-    # Suma sigma_D
+    # Suma ΣD
     label_x = x + 4 * (size + gap) + 20
     if state.dice_rolled:
-        sum_label = f"ΣD = {state.sigma_D}"
+        sum_label = f"ΣD = {state.ΣD}"
         font_big = pygame.font.SysFont("arial", 32, bold=True)
         txt = font_big.render(sum_label, True, T.ACCENT)
         screen.blit(txt, (label_x, y_dice + 8))

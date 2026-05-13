@@ -17,15 +17,15 @@ espacio formalizado en el análisis EEO 3.1.
 - Implementación: [`game/ai.py`](../game/ai.py).
 - Resultados: ~95 % de victorias contra un agente aleatorio.
 
-> Nota importante: las **variables del código tienen exactamente los mismos
-> nombres que el análisis EEO 3.1**. [`game/eeo.py`](../game/eeo.py) contiene
-> **solo** lo que aparece en las Tablas 1 y 2 (sin paths, sin helpers, sin
-> orquestador); lo derivado vive en [`rules.py`](../game/rules.py) y
-> [`engine.py`](../game/engine.py). La IA accede a `state.R`, `state.M`,
-> `state.tau`, `state.sigma_D`, `state.D`, `state.F`, `state.C[n].O`
-> (ocupante), `state.C[n].U` (ubicación) y `state.C[n].rho` (roseta), más
-> las propiedades de cada `Piece` (`piece.n`, `piece.J`, `piece.S`,
-> `piece.P`). No hay traducción intermedia: el código *es* el modelo formal.
+> Nota importante: las **variables del código son 1:1 con el análisis EEO
+> 3.1**, incluyendo Unicode (`τ`, `ΣD`, `ρ`). [`game/eeo.py`](../game/eeo.py)
+> contiene **solo** lo que aparece en las Tablas 1 y 2 (sin paths, sin
+> helpers, sin orquestador); lo derivado vive en [`rules.py`](../game/rules.py)
+> y [`engine.py`](../game/engine.py). La IA accede a `state.R[j]`,
+> `state.M[j]`, `state.τ`, `state.ΣD`, `state.D[k]` (k ∈ {1..4}),
+> `state.F[i]` (i ∈ {1..8}), `state.C[n].O / .U / .ρ`, más las propiedades
+> de cada `Piece` (`piece.n`, `piece.J`, `piece.S`, `piece.P`). No hay
+> traducción intermedia: el código *es* el modelo formal.
 
 ---
 
@@ -33,19 +33,20 @@ espacio formalizado en el análisis EEO 3.1.
 
 La función de evaluación lee directamente las variables EEO:
 
-| Variable EEO | Código | Uso en la IA |
-| ------------ | ------ | ------------ |
+| Variable EEO | Código (1:1) | Uso en la IA |
+| ------------ | ------------ | ------------ |
 | `R_j` | `state.R[j]` | Reserva del jugador (peso negativo si es propia) |
 | `M_j` | `state.M[j]` | Fichas en meta — peso muy alto |
-| `tau` | `state.tau` | Quién decide en cada nodo del árbol |
-| `sigma_D` | `state.sigma_D` | Suma de dados; rama del nodo CHANCE |
-| `D_k` | `state.D[k-1]` | Resultado individual de cada dado |
+| `τ`   | `state.τ`    | Quién decide en cada nodo del árbol |
+| `ΣD`  | `state.ΣD`   | Suma de dados; rama del nodo CHANCE |
+| `D_k` | `state.D[k]` | Resultado individual de cada dado (k ∈ {1..4}) |
 | `O_n` | `state.C[n].O` | Detección de capturas, bloqueos y rosetas ocupadas |
 | `U_n` | `state.C[n].U` | Ubicación física (estática, `U_n = n`) |
-| `rho_n` | `state.C[n].rho` | Roseta (estática, `True` para `n ∈ {4, 8, 14, 18, 20}`) |
-| `n_i`, `J_i` | `piece.n`, `piece.J` | Identificación de cada ficha al recorrer el árbol |
-| `S_i` | `piece.S` | `espera`, `activa`, `completada` — filtra movimientos legales |
-| `P_i` | `piece.P` | Posición en el camino — base del progreso heurístico |
+| `ρ_n` | `state.C[n].ρ` | Roseta (estática, `True` para `n ∈ {4, 8, 14, 18, 20}`) |
+| `n_i` | `state.F[i].n` | Número de ficha (i ∈ {1..8}) |
+| `J_i` | `state.F[i].J` | Jugador dueño |
+| `S_i` | `state.F[i].S` | `espera`, `activa`, `completada` — filtra movimientos legales |
+| `P_i` | `state.F[i].P` | Posición en el camino — base del progreso heurístico |
 
 ---
 
@@ -57,10 +58,10 @@ operadores de la Tabla 2 están expuestos como funciones en el **orden y con
 los nombres exactos** del análisis:
 
   1. `lanzar_dados`
-  2. `entrar_ficha`
+  2. `entrar_ficha_al_tablero`
   3. `mover_ficha`
   4. `completar_ficha`
-  5. `capturar_ficha`
+  5. `capturar_ficha_rival`
   6. `obtener_turno_extra`
   7. `cambiar_turno`
   8. `perder_turno`
@@ -70,21 +71,21 @@ los nombres exactos** del análisis:
 ### Operador 1 — Lanzar dados
 
 ```
-Condición:  tau = J_j  AND  ¬dice_rolled
-Efecto:     D_k ∈ {0,1} aleatorio,  sigma_D = Σ D_k
+Condición:  τ = J_j  AND  ¬dice_rolled
+Efecto:     D_k ∈ {0,1} aleatorio,  ΣD = Σ D_k
 ```
 
 **En la IA:** los nodos CHANCE del árbol modelan este operador como una
-distribución de probabilidad sobre las 5 sumas posibles `sigma_D ∈ {0..4}`.
+distribución de probabilidad sobre las 5 sumas posibles `ΣD ∈ {0..4}`.
 El valor de un nodo CHANCE es:
 
 $$
-V_{\text{chance}}(s) = \sum_{\sigma_D = 0}^{4} P(\sigma_D) \cdot V_{\text{decision}}(s, \sigma_D)
+V_{\text{chance}}(s) = \sum_{\ΣD = 0}^{4} P(\ΣD) \cdot V_{\text{decision}}(s, \ΣD)
 $$
 
-con `P(sigma_D)` siguiendo la distribución binomial $B(4, 0.5)$:
+con `P(ΣD)` siguiendo la distribución binomial $B(4, 0.5)$:
 
-| sigma_D | 0 | 1 | 2 | 3 | 4 |
+| ΣD | 0 | 1 | 2 | 3 | 4 |
 | ------- | - | - | - | - | - |
 | P | 1/16 | 4/16 | 6/16 | 4/16 | 1/16 |
 
@@ -93,21 +94,21 @@ Definida en `ai.py` como `DICE_PROB`.
 ### Operador 2 — Entrar ficha al tablero
 
 ```
-Condición:  R_j > 0 ∧ sigma_D > 0 ∧ O_destino ≠ J_j
-Efecto:     S_i: espera→activa,  P_i = sigma_D,  O_destino = J_j,  R_j -= 1
+Condición:  R_j > 0 ∧ ΣD > 0 ∧ O_destino ≠ J_j
+Efecto:     S_i: espera→activa,  P_i = ΣD,  O_destino = J_j,  R_j -= 1
 ```
 
 **En la IA:** `legal_moves(state)` filtra movimientos según esta condición.
 Cuando la IA evalúa "entrar ficha", la heurística suma:
 
 - `−12 · R_j` antes (alta penalización por reserva grande propia)
-- `+8 · sigma_D` después (progreso lineal por la nueva posición)
+- `+8 · ΣD` después (progreso lineal por la nueva posición)
 
 ### Operador 3 — Mover ficha
 
 ```
-Condición:  S_i = activa ∧ P_i + sigma_D ≤ 14 ∧ casillas válidas
-Efecto:     O_origen = vacío,  P_i += sigma_D,  O_destino = J_j
+Condición:  S_i = activa ∧ P_i + ΣD ≤ 14 ∧ casillas válidas
+Efecto:     O_origen = vacío,  P_i += ΣD,  O_destino = J_j
 ```
 
 **En la IA:** se exploran TODAS las fichas activas como posibles movimientos.
@@ -123,7 +124,7 @@ Esto refleja que avanzar de 13→14 vale más que avanzar de 1→2.
 ### Operador 4 — Completar ficha
 
 ```
-Condición:  S_i = activa ∧ P_i + sigma_D = 15 (suma exacta)
+Condición:  S_i = activa ∧ P_i + ΣD = 15 (suma exacta)
 Efecto:     S_i: activa→completada,  P_i = 0,  M_j += 1,  O_origen = vacío
 ```
 
@@ -139,7 +140,7 @@ se explora primero.
 ### Operador 5 — Capturar ficha rival
 
 ```
-Condición:  O_destino = J_rival ∧ U_destino ∈ {5..12} ∧ rho_destino = NO
+Condición:  O_destino = J_rival ∧ U_destino ∈ {5..12} ∧ ρ_destino = NO
 Efecto:     S_rival: activa→espera,  P_rival = 0,  R_rival += 1
 ```
 
@@ -156,15 +157,15 @@ Y en la heurística, capturar produce:
 - En el siguiente turno, la ficha capturada estará en espera, por lo que el
   rival pierde el progreso `P_i`-related que tenía.
 
-Además, `_threat_score()` mide cuántas sumas `sigma_D` permitirían al rival
+Además, `_threat_score()` mide cuántas sumas `ΣD` permitirían al rival
 capturarte a ti (probabilidad ponderada hasta 60 puntos), evitando jugadas
 suicidas.
 
 ### Operador 6 — Obtener turno extra (roseta)
 
 ```
-Condición:  rho_destino = SI
-Efecto:     tau se mantiene
+Condición:  ρ_destino = SI
+Efecto:     τ se mantiene
 ```
 
 **En la IA:** muy valorado porque permite encadenar jugadas. La heurística
@@ -181,36 +182,36 @@ if rules.is_rosette(target):
 ```
 
 Importante: el árbol de búsqueda respeta el turno extra. Después de aplicar
-`apply_move`, si `tau` no cambió, el siguiente nodo de decisión vuelve a ser
+`apply_move`, si `τ` no cambió, el siguiente nodo de decisión vuelve a ser
 de la IA (MAX), no del rival.
 
 ### Operador 7 — Cambiar turno
 
 ```
-Condición:  movimiento completado AND rho_destino = NO
-Efecto:     tau = J_opuesto
+Condición:  movimiento completado AND ρ_destino = NO
+Efecto:     τ = J_opuesto
 ```
 
 **En la IA:** define la alternancia MAX/MIN del árbol. Cada llamada a
-`apply_move` ya cambia `tau` automáticamente cuando corresponde, así que el
-algoritmo solo necesita revisar `state.tau` para saber si el siguiente nodo
+`apply_move` ya cambia `τ` automáticamente cuando corresponde, así que el
+algoritmo solo necesita revisar `state.τ` para saber si el siguiente nodo
 es MAX o MIN.
 
 ```python
-if state.tau == maximizing_player:
+if state.τ == maximizing_player:
     # nodo MAX
 else:
     # nodo MIN
 ```
 
-### Operador 8 — Perder turno (sigma_D = 0)
+### Operador 8 — Perder turno
 
 ```
-Condición:  sigma_D = 0  OR  no hay movimientos legales
-Efecto:     tau = J_opuesto
+Condición:  ΣD = 0  OR  no hay movimientos legales
+Efecto:     τ = J_opuesto
 ```
 
-**En la IA:** se modela en los nodos CHANCE para `sigma_D = 0`:
+**En la IA:** se modela en los nodos CHANCE para `ΣD = 0`:
 
 ```python
 if s == 0:
@@ -228,24 +229,24 @@ La probabilidad de este caso es 1/16 (6.25 %) y se incluye en la esperanza.
 Estado raíz (mi turno, debo lanzar dados)
     ▼
 Nodo CHANCE (Operador 1: Lanzar dados)
-    ├── sigma_D = 0  [P=1/16]  → Operador 8 (perder turno) → siguiente nivel
-    ├── sigma_D = 1  [P=4/16]
-    ├── sigma_D = 2  [P=6/16]
-    ├── sigma_D = 3  [P=4/16]
-    └── sigma_D = 4  [P=1/16]
+    ├── ΣD = 0  [P=1/16]  → Operador 8 (perder turno) → siguiente nivel
+    ├── ΣD = 1  [P=4/16]
+    ├── ΣD = 2  [P=6/16]
+    ├── ΣD = 3  [P=4/16]
+    └── ΣD = 4  [P=1/16]
               │
               ▼
         Nodo MAX (mi decisión)
-        Movimientos legales en este sigma_D:
+        Movimientos legales en este ΣD:
             ├── Mover F_1  (Op 3)
             ├── Mover F_2  (Op 3 + posible Op 5 captura)
             ├── Entrar F_3 (Op 2)
             └── Completar F_4 (Op 4)
                     │
                     ▼
-              Si rho_destino = NO:
+              Si ρ_destino = NO:
                 Nodo CHANCE del rival (su lanzamiento)
-              Si rho_destino = SI (Op 6 turno extra):
+              Si ρ_destino = SI (Op 6 turno extra):
                 Otro nodo CHANCE mío (sigo yo)
 ```
 
@@ -281,9 +282,9 @@ El análisis estático de "estar en zona compartida" es ingenuo. El método
 ```python
 para cada ficha propia activa en zona compartida (no segura):
     threats_prob = 0
-    para cada suma sigma_D ∈ {1..4}:
-        si alguna ficha rival puede llegar exactamente a mi casilla con sigma_D:
-            threats_prob += P(sigma_D)
+    para cada suma ΣD ∈ {1..4}:
+        si alguna ficha rival puede llegar exactamente a mi casilla con ΣD:
+            threats_prob += P(ΣD)
     score -= int(60 · threats_prob)   # exposición = malo para mí
 ```
 
@@ -308,15 +309,15 @@ Tablas 1 y 2 del análisis, sin ruido. Todo lo demás (paths, zonas, helpers,
 orquestador, control de turno) vive en archivos separados:
 
   - [`game/eeo.py`](../game/eeo.py)    — Tabla 1 (entidades + dominios) y Tabla 2 (8 operadores).
-  - [`game/rules.py`](../game/rules.py) — reglas derivadas: `PATH_J1`, `PATH_J2`, `META_POS`, `CASILLAS_*`, `ROSETA_SEGURA`, helpers (`square_at`, `square_of`, `is_rosette`, `is_shared`, `opponent`).
+  - [`game/rules.py`](../game/rules.py) — reglas derivadas: `PATH_J_1`, `PATH_J_2`, `META_POS`, `CASILLAS_*`, `ROSETA_SEGURA`, helpers (`square_at`, `square_of`, `is_rosette`, `is_shared`, `opponent`).
   - [`game/engine.py`](../game/engine.py) — `Game` (extiende `GameState` con `dice_rolled`, `last_event`, `winner`), `apply_move` (orquestador) y `legal_moves` (consulta).
 
 ### Tabla 1 — entidades y dominios (en `eeo.py`)
 
 | Tabla 1 | Código |
 | ------- | ------ |
-| Clases: `Casilla` (`O`, `U`, `rho`), `Piece` (`n`, `J`, `S`, `P`), `GameState` (`R`, `M`, `F`, `D`, `tau`, `sigma_D`, `C[n]`) | atributos exactos según las columnas "Variable" de la Tabla 1 |
-| Dominios: `J1`, `J2`, `ESPERA`, `ACTIVA`, `COMPLETADA`, `ROSETAS` | constantes |
+| Clases: `Casilla` (`O`, `U`, `ρ`), `Piece` (`n`, `J`, `S`, `P`), `GameState` (`R`, `M`, `F`, `D`, `τ`, `ΣD`, `C[n]`) | atributos exactos según las columnas "Variable" de la Tabla 1 |
+| Dominios: `J_1`, `J_2`, `ESPERA`, `ACTIVA`, `COMPLETADA`, `ROSETAS` | constantes |
 | Cardinalidades: `FICHAS_POR_JUGADOR = 4`, `NUM_DADOS = 4`, `NUM_CASILLAS = 20` | constantes |
 
 ### Tabla 2 — operadores (en `eeo.py`, en el orden exacto del análisis)
@@ -324,10 +325,10 @@ orquestador, control de turno) vive en archivos separados:
 | Nº | Operador               | Función en `eeo.py`                              |
 | -- | ---------------------- | ------------------------------------------------ |
 | 1  | Lanzar dados           | `lanzar_dados(state)`                            |
-| 2  | Entrar ficha al tablero | `entrar_ficha(state, piece, target)`            |
+| 2  | Entrar ficha al tablero | `entrar_ficha_al_tablero(state, piece, target)` |
 | 3  | Mover ficha            | `mover_ficha(state, piece, origin, target)`     |
 | 4  | Completar ficha        | `completar_ficha(state, piece, origin)`         |
-| 5  | Capturar ficha rival   | `capturar_ficha(state, rival)`                  |
+| 5  | Capturar ficha rival   | `capturar_ficha_rival(state, rival)`            |
 | 6  | Obtener turno extra    | `obtener_turno_extra(state)`                    |
 | 7  | Cambiar turno          | `cambiar_turno(state)`                          |
 | 8  | Perder turno           | `perder_turno(state)`                           |
@@ -336,9 +337,9 @@ orquestador, control de turno) vive en archivos separados:
 
 | Concepto                          | Código |
 | --------------------------------- | ------ |
-| Camino `P_i → U_n` por jugador    | `rules.PATH_J1`, `rules.PATH_J2`, `rules.path_for`, `rules.square_at`, `rules.square_of` |
+| Camino `P_i → U_n` por jugador    | `rules.PATH_J_1`, `rules.PATH_J_2`, `rules.path_for`, `rules.square_at`, `rules.square_of` |
 | Posición transitoria a meta       | `rules.META_POS = 15` |
-| Zonas del tablero                 | `rules.CASILLAS_COMPARTIDAS`, `rules.CASILLAS_PRIVADAS_J1`, `rules.CASILLAS_PRIVADAS_J2` |
+| Zonas del tablero                 | `rules.CASILLAS_COMPARTIDAS`, `rules.CASILLAS_PRIVADAS_J_1`, `rules.CASILLAS_PRIVADAS_J_2` |
 | Roseta 8 inmune a captura         | `rules.ROSETA_SEGURA` |
 | Helpers                           | `rules.is_rosette`, `rules.is_shared`, `rules.opponent` |
 | Estado de sesión (control turno)  | `engine.Game` (campos `dice_rolled`, `last_event`, `winner`; métodos `is_terminal`, `pieces_of`, `get_piece`, `occupant_at`, `piece_at_square`, `clone`) |

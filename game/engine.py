@@ -4,14 +4,12 @@ usando los helpers de `rules.py`, y añade el control de sesión que no
 forma parte del modelo EEO formal (banderas de turno, descripción del
 último evento, jugador ganador).
 
-Lo que vive aquí:
-
   - `Game`         : extiende `eeo.GameState` con los campos auxiliares
                      `dice_rolled`, `last_event`, `winner` y métodos de
                      consulta (`pieces_of`, `get_piece`, `occupant_at`,
                      `piece_at_square`, `is_terminal`, `clone`).
-  - `lanzar_dados` : wrapper de `eeo.lanzar_dados` + bookkeeping.
-  - `perder_turno` : wrapper de `eeo.perder_turno` + bookkeeping.
+  - `lanzar_dados` : wrapper del operador 1 + bookkeeping.
+  - `perder_turno` : wrapper del operador 8 + bookkeeping.
   - `apply_move`   : compone los operadores 2 a 7 de la Tabla 2 según
                      el caso (entrada / movimiento / completar, con o
                      sin captura, con o sin roseta).
@@ -28,15 +26,14 @@ from . import rules
 
 class Game(eeo.GameState):
     """
-    Hereda los atributos de Tabla 1 (R, M, F, D, tau, sigma_D, C) y
-    añade tres campos auxiliares que NO están en la Tabla 1:
+    Hereda los atributos de Tabla 1 (R, M, F, D, τ, ΣD, C) y añade
+    tres campos auxiliares que NO están en la Tabla 1:
 
         dice_rolled : True si los dados ya se lanzaron este turno.
         last_event  : descripción textual del último operador aplicado.
         winner      : jugador ganador (None si la partida sigue).
     """
 
-    # GameState usa __slots__: declaramos sólo los nuevos aquí.
     __slots__ = ("dice_rolled", "last_event", "winner")
 
     def __init__(self):
@@ -51,10 +48,10 @@ class Game(eeo.GameState):
         return self.winner is not None
 
     def pieces_of(self, J):
-        return [p for p in self.F if p.J == J]
+        return [p for p in self.F.values() if p.J == J]
 
     def get_piece(self, J, n):
-        for p in self.F:
+        for p in self.F.values():
             if p.J == J and p.n == n:
                 return p
         return None
@@ -69,7 +66,7 @@ class Game(eeo.GameState):
         """Ficha activa que ocupa `square`, o None."""
         if square is None:
             return None
-        for p in self.F:
+        for p in self.F.values():
             if p.S == eeo.ACTIVA and rules.square_at(p.J, p.P) == square:
                 return p
         return None
@@ -80,9 +77,9 @@ class Game(eeo.GameState):
         new = Game.__new__(Game)
         new.R = dict(self.R)
         new.M = dict(self.M)
-        new.F = [p.clone() for p in self.F]
-        new.D = list(self.D)
-        new.tau = self.tau
+        new.F = {i: p.clone() for i, p in self.F.items()}
+        new.D = dict(self.D)
+        new.τ = self.τ
         new.C = {n: c.clone() for n, c in self.C.items()}
         new.dice_rolled = self.dice_rolled
         new.last_event = self.last_event
@@ -91,21 +88,22 @@ class Game(eeo.GameState):
 
 
 # ══════════════════════════════════════════════════════════════════════
-# Wrappers de los operadores que requieren bookkeeping de sesión
+# Wrappers de operadores que requieren bookkeeping de sesión
 # ══════════════════════════════════════════════════════════════════════
 
 def lanzar_dados(game, rng=None):
     """Aplica el Operador 1 (Tabla 2) y marca los dados como lanzados."""
     eeo.lanzar_dados(game, rng)
     game.dice_rolled = True
-    game.last_event = f"Jugador {game.tau} lanza dados: ΣD = {game.sigma_D}"
+    game.last_event = f"Jugador {game.τ} lanza dados: ΣD = {game.ΣD}"
 
 
 def perder_turno(game):
     """Aplica el Operador 8 (Tabla 2) y limpia los dados para el rival."""
-    game.last_event = f"Jugador {game.tau} pierde turno (ΣD = {game.sigma_D})"
+    game.last_event = f"Jugador {game.τ} pierde turno (ΣD = {game.ΣD})"
     eeo.perder_turno(game)
-    game.D = [0] * eeo.NUM_DADOS
+    for k in game.D:
+        game.D[k] = 0
     game.dice_rolled = False
 
 
@@ -115,12 +113,12 @@ def perder_turno(game):
 
 def legal_moves(game):
     """Fichas movibles para τ con ΣD actual (no es operador de Tabla 2)."""
-    if game.sigma_D == 0 or game.is_terminal():
+    if game.ΣD == 0 or game.is_terminal():
         return []
 
     moves = []
-    s = game.sigma_D
-    for piece in game.pieces_of(game.tau):
+    s = game.ΣD
+    for piece in game.pieces_of(game.τ):
         if piece.S == eeo.COMPLETADA:
             continue
 
@@ -141,7 +139,6 @@ def legal_moves(game):
         if occupant == piece.J:
             continue
         if target == rules.ROSETA_SEGURA and occupant != 0 and occupant != piece.J:
-            # Regla principal #4: no se puede entrar a roseta 8 ocupada por rival
             continue
         moves.append(piece)
 
@@ -158,21 +155,19 @@ def apply_move(game, piece):
     Tabla 2 en el siguiente orden:
 
         Si S_i = espera:
-            (Op. 5 Capturar  +)  Op. 2 Entrar ficha
-        Si S_i = activa y P_i + ΣD < 15:
+            (Op. 5 Capturar  +)  Op. 2 Entrar ficha al tablero
+        Si S_i = activa  y  P_i + ΣD < 15:
             (Op. 5 Capturar  +)  Op. 3 Mover ficha
-        Si S_i = activa y P_i + ΣD = 15:
+        Si S_i = activa  y  P_i + ΣD = 15:
             Op. 4 Completar ficha
         Luego:
-            Op. 6 Obtener turno extra   (si ρ_destino = sí)
-              ó    Op. 7 Cambiar turno  (en caso contrario)
-
-    Retorna un dict con los eventos ocurridos.
+            Op. 6 Obtener turno extra  (si ρ_destino = sí)
+              ó    Op. 7 Cambiar turno (en caso contrario)
     """
-    assert piece.J == game.tau, "La ficha no pertenece al jugador en turno"
-    assert game.sigma_D > 0, "No se puede mover con ΣD = 0"
+    assert piece.J == game.τ, "La ficha no pertenece al jugador en turno"
+    assert game.ΣD > 0, "No se puede mover con ΣD = 0"
 
-    s = game.sigma_D
+    s = game.ΣD
     info = {"captured": None, "completed": False, "extra_turn": False,
             "entered": False, "event": ""}
 
@@ -180,14 +175,14 @@ def apply_move(game, piece):
     if piece.S == eeo.ESPERA:
         target = rules.square_at(piece.J, s)
 
-        # Op. 5 (Capturar) si en el destino hay ficha rival
+        # Op. 5 (Capturar ficha rival) si en el destino hay ficha rival
         rival = game.piece_at_square(target)
         if rival is not None and rival.J != piece.J:
-            eeo.capturar_ficha(game, rival)
+            eeo.capturar_ficha_rival(game, rival)
             info["captured"] = rival
 
-        # Op. 2 (Entrar)
-        eeo.entrar_ficha(game, piece, target)
+        # Op. 2 (Entrar ficha al tablero)
+        eeo.entrar_ficha_al_tablero(game, piece, target)
         info["entered"] = True
         info["event"] = f"J{piece.J} entra ficha {piece.n} en casilla {target}"
 
@@ -196,7 +191,7 @@ def apply_move(game, piece):
         origin = rules.square_at(piece.J, piece.P)
 
         if new_P == rules.META_POS:
-            # Op. 4 (Completar)
+            # Op. 4 (Completar ficha)
             eeo.completar_ficha(game, piece, origin)
             info["completed"] = True
             info["event"] = f"J{piece.J} completa ficha {piece.n} (a meta)"
@@ -205,13 +200,13 @@ def apply_move(game, piece):
         else:
             target = rules.square_at(piece.J, new_P)
 
-            # Op. 5 (Capturar) si en el destino hay ficha rival
+            # Op. 5 (Capturar ficha rival)
             rival = game.piece_at_square(target)
             if rival is not None and rival.J != piece.J:
-                eeo.capturar_ficha(game, rival)
+                eeo.capturar_ficha_rival(game, rival)
                 info["captured"] = rival
 
-            # Op. 3 (Mover)
+            # Op. 3 (Mover ficha)
             eeo.mover_ficha(game, piece, origin, target)
             info["event"] = f"J{piece.J} mueve ficha {piece.n} a casilla {target}"
 
@@ -232,7 +227,8 @@ def apply_move(game, piece):
         descr += " | turno extra (roseta)"
     game.last_event = descr
 
-    game.D = [0] * eeo.NUM_DADOS
+    for k in game.D:
+        game.D[k] = 0
     game.dice_rolled = False
 
     return info
