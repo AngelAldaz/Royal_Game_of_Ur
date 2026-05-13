@@ -150,7 +150,7 @@ def main():
                         if not moves:
                             engine.perder_turno(game_state)
                         else:
-                            chosen = AI.choose_move(game_state, depth=3)
+                            chosen = AI.choose_move(game_state)
                             if chosen is None:
                                 engine.perder_turno(game_state)
                             else:
