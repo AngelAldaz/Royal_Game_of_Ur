@@ -18,14 +18,15 @@ espacio formalizado en el análisis EEO 3.1.
 - Resultados: ~95 % de victorias contra un agente aleatorio.
 
 > Nota importante: las **variables del código son 1:1 con el análisis EEO
-> 3.1**, incluyendo Unicode (`τ`, `ΣD`, `ρ`). [`game/eeo.py`](../game/eeo.py)
+> 3.1**, incluyendo Unicode (`τ`, `ΣD`, `ρ`) y los nombres en español de
+> las entidades (`Ficha`, `Casilla`, `Ur`). [`game/eeo.py`](../game/eeo.py)
 > contiene **solo** lo que aparece en las Tablas 1 y 2 (sin paths, sin
 > helpers, sin orquestador); lo derivado vive en [`rules.py`](../game/rules.py)
 > y [`engine.py`](../game/engine.py). La IA accede a `state.R[j]`,
 > `state.M[j]`, `state.τ`, `state.ΣD`, `state.D[k]` (k ∈ {1..4}),
 > `state.F[i]` (i ∈ {1..8}), `state.C[n].O / .U / .ρ`, más las propiedades
-> de cada `Piece` (`piece.n`, `piece.J`, `piece.S`, `piece.P`). No hay
-> traducción intermedia: el código *es* el modelo formal.
+> de cada `Ficha` (`F_i.n`, `F_i.J`, `F_i.S`, `F_i.P`). No hay traducción
+> intermedia: el código *es* el modelo formal.
 
 ---
 
@@ -310,14 +311,14 @@ orquestador, control de turno) vive en archivos separados:
 
   - [`game/eeo.py`](../game/eeo.py)    — Tabla 1 (entidades + dominios) y Tabla 2 (8 operadores).
   - [`game/rules.py`](../game/rules.py) — reglas derivadas: `PATH_J_1`, `PATH_J_2`, `META_POS`, `CASILLAS_*`, `ROSETA_SEGURA`, helpers (`square_at`, `square_of`, `is_rosette`, `is_shared`, `opponent`).
-  - [`game/engine.py`](../game/engine.py) — `Game` (extiende `GameState` con `dice_rolled`, `last_event`, `winner`), `apply_move` (orquestador) y `legal_moves` (consulta).
+  - [`game/engine.py`](../game/engine.py) — `Game` (extiende `Ur` con `dice_rolled`, `last_event`, `winner`), `apply_move` (orquestador) y `legal_moves` (consulta).
 
 ### Tabla 1 — entidades y dominios (en `eeo.py`)
 
 | Tabla 1 | Código |
 | ------- | ------ |
-| Clases: `Casilla` (`O`, `U`, `ρ`), `Piece` (`n`, `J`, `S`, `P`), `GameState` (`R`, `M`, `F`, `D`, `τ`, `ΣD`, `C[n]`) | atributos exactos según las columnas "Variable" de la Tabla 1 |
-| Dominios: `J_1`, `J_2`, `ESPERA`, `ACTIVA`, `COMPLETADA`, `ROSETAS` | constantes |
+| Clases: `Casilla` (`O`, `U`, `ρ`), `Ficha` (`n`, `J`, `S`, `P`), `Ur` (`R`, `M`, `F`, `D`, `τ`, `ΣD`, `C[n]`) | atributos exactos según las columnas "Variable" de la Tabla 1 |
+| Dominios: `J_1`, `J_2`, `espera`, `activa`, `completada`, `sí`, `no`, `vacío`, `ROSETAS` | constantes |
 | Cardinalidades: `FICHAS_POR_JUGADOR = 4`, `NUM_DADOS = 4`, `NUM_CASILLAS = 20` | constantes |
 
 ### Tabla 2 — operadores (en `eeo.py`, en el orden exacto del análisis)
@@ -361,8 +362,8 @@ Minimax para juegos con azar (Russell & Norvig, *AI: A Modern Approach*).
 
 **P: ¿Cómo conecta el código con el análisis EEO?**
 R: Toda la Tabla 1 y la Tabla 2 viven en un único archivo:
-[`game/eeo.py`](../game/eeo.py). Las clases del modelo (`Casilla`, `Piece`,
-`GameState`) usan EXACTAMENTE las mismas variables del análisis (Tabla 1).
+[`game/eeo.py`](../game/eeo.py). Las clases del modelo (`Casilla`, `Ficha`,
+`Ur`) usan EXACTAMENTE las mismas variables del análisis (Tabla 1).
 Cada operador de la Tabla 2 es una función con su nombre en español
 (`lanzar_dados`, `entrar_ficha`, `mover_ficha`, `capturar_ficha`,
 `completar_ficha`, `obtener_turno_extra`, `cambiar_turno`, `perder_turno`),

@@ -108,10 +108,11 @@ Total: **102 componentes**.
 
 | Componente del análisis | Implementación |
 | ----------------------- | -------------- |
-| Tabla 1 (entidades / atributos) | [`game/state.py`](game/state.py), [`game/constants.py`](game/constants.py) |
-| Vector de estado (102 comp.) | Clase `GameState` + panel [`ui/eeo_panel.py`](ui/eeo_panel.py) |
-| Tabla 2 (operadores) | [`game/operators.py`](game/operators.py) — un operador por función |
-| Espacio de estados | Cada turno aplica un operador → genera transición visible en pantalla |
+| Tabla 1 (entidades / atributos) | [`game/eeo.py`](game/eeo.py) — clases `Ficha`, `Casilla`, `Ur` |
+| Vector de estado (102 comp.) | Clase `Ur` + panel [`ui/eeo_panel.py`](ui/eeo_panel.py) |
+| Tabla 2 (operadores) | [`game/eeo.py`](game/eeo.py) — 8 funciones (`lanzar_dados`, `entrar_ficha_al_tablero`, …) |
+| Reglas derivadas (paths, helpers) | [`game/rules.py`](game/rules.py) |
+| Motor del juego (apply_move, legal_moves) | [`game/engine.py`](game/engine.py) |
 | Solución por agente IA | [`game/ai.py`](game/ai.py) — Expectiminimax sobre el espacio de estados |
 
 ---
@@ -122,9 +123,9 @@ Total: **102 componentes**.
 Ur-Game/
 ├── main.py                   ← bucle principal de la app y orquestación
 ├── game/                     ← MODELO (independiente de la UI)
-│   ├── constants.py          ← caminos, rosetas, identificadores (Tabla 1)
-│   ├── state.py              ← Piece, GameState (vector EEO)
-│   ├── operators.py          ← 8 operadores (Tabla 2) como funciones puras
+│   ├── eeo.py                ← SOLO Tablas 1 y 2 (Ficha, Casilla, Ur + 8 operadores)
+│   ├── rules.py              ← paths, zonas, ROSETA_SEGURA, helpers
+│   ├── engine.py             ← Game (sesión) + apply_move + legal_moves
 │   └── ai.py                 ← Expectiminimax + heurística
 ├── ui/                       ← VISTA Pygame
 │   ├── theme.py              ← paleta de colores y dimensiones

@@ -229,9 +229,9 @@ def _highlights_for(state, legal_moves):
         return out
     s = state.ΣD
     for piece in legal_moves:
-        if piece.S != eeo.ESPERA and piece.S != eeo.ACTIVA:
+        if piece.S != eeo.espera and piece.S != eeo.activa:
             continue
-        if piece.S == eeo.ESPERA:
+        if piece.S == eeo.espera:
             new_P = s
         else:
             new_P = piece.P + s

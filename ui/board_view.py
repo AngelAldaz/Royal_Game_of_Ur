@@ -50,8 +50,8 @@ def draw_board(screen, state, font_small, highlights=None, ai_thinking=False):
         pygame.draw.rect(screen, color, rect.inflate(6, 6), width=4, border_radius=10)
 
     # Fichas en el tablero (atributo S = activa)
-    for piece in state.F:
-        if piece.S != eeo.ACTIVA:
+    for piece in state.F.values():
+        if piece.S != eeo.activa:
             continue
         sq = rules.square_of(piece)
         if sq is None:
@@ -144,10 +144,10 @@ def _draw_reserve_meta(screen, state, font):
     centered_label("Reserva J2", T.TEXT_DIM, j2_reserve_cx, j2_y - 18)
     centered_label(f"Meta J2: {state.M[eeo.J_2]}/4", T.ACCENT_DIM, j2_meta_cx, j2_y - 18)
 
-    j1_reserve_pieces = [p for p in state.pieces_of(eeo.J_1) if p.S == eeo.ESPERA]
-    j2_reserve_pieces = [p for p in state.pieces_of(eeo.J_2) if p.S == eeo.ESPERA]
-    j1_meta_pieces = [p for p in state.pieces_of(eeo.J_1) if p.S == eeo.COMPLETADA]
-    j2_meta_pieces = [p for p in state.pieces_of(eeo.J_2) if p.S == eeo.COMPLETADA]
+    j1_reserve_pieces = [p for p in state.pieces_of(eeo.J_1) if p.S == eeo.espera]
+    j2_reserve_pieces = [p for p in state.pieces_of(eeo.J_2) if p.S == eeo.espera]
+    j1_meta_pieces = [p for p in state.pieces_of(eeo.J_1) if p.S == eeo.completada]
+    j2_meta_pieces = [p for p in state.pieces_of(eeo.J_2) if p.S == eeo.completada]
 
     spacing = 30
     for i, p in enumerate(j1_reserve_pieces):
@@ -188,8 +188,8 @@ def _draw_turn_indicator(screen, state, font, ai_thinking):
 
 def piece_at_pos(state, mouse_pos):
     """Devuelve la ficha cuyo casillero contenga el mouse, o None."""
-    for piece in state.F:
-        if piece.S != eeo.ACTIVA:
+    for piece in state.F.values():
+        if piece.S != eeo.activa:
             continue
         sq = rules.square_of(piece)
         if sq is None:
@@ -208,7 +208,7 @@ def reserve_piece_at_pos(state, mouse_pos):
     else:
         cy_base = T.BOARD_Y + (T.TILE_SIZE + T.TILE_GAP) * 2 + 5 + 18
 
-    reserve_pieces = [p for p in state.pieces_of(state.τ) if p.S == eeo.ESPERA]
+    reserve_pieces = [p for p in state.pieces_of(state.τ) if p.S == eeo.espera]
     for i, p in enumerate(reserve_pieces):
         cy = cy_base + i * 30
         if (mouse_pos[0] - cx) ** 2 + (mouse_pos[1] - cy) ** 2 <= 16 ** 2:

@@ -72,14 +72,14 @@ def draw_panel(screen, state, font_big, font_small, font_tiny):
     col_w = 220
     for sq in range(1, 21):
         casilla = state.C[sq]
-        if casilla.O == 0:
+        if casilla.O == eeo.vacío:
             owner_str = "vacío"
             owner_col = T.TEXT_DIM
         else:
             owner_str = f"J_{casilla.O}"
             owner_col = T.TEXT
-        ρ = "SI" if casilla.ρ else "NO"
-        text = f"({owner_str}, {casilla.U}, {ρ})"
+        ρ_str = "sí" if casilla.ρ else "no"
+        text = f"({owner_str}, {casilla.U}, {ρ_str})"
         col = (sq - 1) // 10
         row = (sq - 1) % 10
         cx = x + 8 + col * col_w
